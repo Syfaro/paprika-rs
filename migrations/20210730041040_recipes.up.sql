@@ -1,0 +1,19 @@
+CREATE TABLE status (
+    name TEXT PRIMARY KEY,
+    position INTEGER NOT NULL
+);
+
+CREATE TABLE recipe (
+    id SERIAL PRIMARY KEY,
+    uid TEXT UNIQUE NOT NULL,
+    hash TEXT NOT NULL,
+    data JSONB NOT NULL
+);
+
+CREATE TABLE meal (
+    id SERIAL PRIMARY KEY,
+    uid TEXT UNIQUE NOT NULL,
+    recipe_uid TEXT NOT NULL,
+    date TIMESTAMP WITH TIME ZONE NOT NULL,
+    data JSONB NOT NULL
+);
