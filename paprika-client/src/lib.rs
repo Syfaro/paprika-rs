@@ -131,7 +131,6 @@ pub struct PaprikaRecipeHash {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[cfg_attr(feature = "database", derive(sqlx::FromRow))]
 pub struct PaprikaRecipe {
     pub categories: Vec<String>,
     pub cook_time: Option<String>,
@@ -164,7 +163,6 @@ pub struct PaprikaRecipe {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[cfg_attr(feature = "database", derive(sqlx::FromRow))]
 pub struct PaprikaMeal {
     pub uid: String,
     pub recipe_uid: String,
@@ -178,7 +176,6 @@ pub struct PaprikaMeal {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[cfg_attr(feature = "database", derive(sqlx::FromRow))]
 pub struct PaprikaGroceryItem {
     pub uid: String,
     pub recipe_uid: Option<String>,
@@ -196,7 +193,6 @@ pub struct PaprikaGroceryItem {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[cfg_attr(feature = "database", derive(sqlx::FromRow))]
 pub struct PaprikaAisle {
     pub uid: String,
     pub name: String,
@@ -204,7 +200,6 @@ pub struct PaprikaAisle {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[cfg_attr(feature = "database", derive(sqlx::FromRow))]
 pub struct PaprikaMenu {
     pub uid: String,
     pub name: String,
@@ -214,7 +209,6 @@ pub struct PaprikaMenu {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[cfg_attr(feature = "database", derive(sqlx::FromRow))]
 pub struct PaprikaMenuItem {
     pub uid: String,
     pub name: String,
@@ -226,7 +220,6 @@ pub struct PaprikaMenuItem {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[cfg_attr(feature = "database", derive(sqlx::FromRow))]
 pub struct PaprikaPhoto {
     pub uid: String,
     pub filename: String,
@@ -237,7 +230,6 @@ pub struct PaprikaPhoto {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[cfg_attr(feature = "database", derive(sqlx::FromRow))]
 pub struct PaprikaMealType {
     pub uid: String,
     pub name: String,
@@ -249,7 +241,6 @@ pub struct PaprikaMealType {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[cfg_attr(feature = "database", derive(sqlx::FromRow))]
 pub struct PaprikaPantryItem {
     pub uid: String,
     pub ingredient: String,
@@ -265,7 +256,6 @@ pub struct PaprikaPantryItem {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[cfg_attr(feature = "database", derive(sqlx::FromRow))]
 pub struct PaprikaGroceryIngredient {
     pub uid: String,
     pub name: String,
@@ -273,7 +263,6 @@ pub struct PaprikaGroceryIngredient {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[cfg_attr(feature = "database", derive(sqlx::FromRow))]
 pub struct PaprikaGroceryList {
     pub uid: String,
     pub name: String,
@@ -283,7 +272,6 @@ pub struct PaprikaGroceryList {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[cfg_attr(feature = "database", derive(sqlx::FromRow))]
 pub struct PaprikaBookmark {
     pub uid: String,
     pub title: String,
@@ -292,7 +280,6 @@ pub struct PaprikaBookmark {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[cfg_attr(feature = "database", derive(sqlx::FromRow))]
 pub struct PaprikaCategory {
     pub uid: String,
     pub order_flag: i32,

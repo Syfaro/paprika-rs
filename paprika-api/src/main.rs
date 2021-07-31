@@ -217,16 +217,7 @@ impl Recipe {
     }
 
     async fn meals(&self, context: &Context) -> Result<Vec<Meal>, FieldError> {
-        let meals = sqlx::query_as!(
-            Meal,
-            r#"SELECT id, date, name, recipe_uid FROM meal WHERE recipe_uid = $1"#,
-            self.uid
-        )
-        .fetch_all(&context.pool)
-        .await
-        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))?;
-
-        Ok(meals)
+        Meal::by_recipe_uid(&context, &self.uid).await
     }
 }
 
@@ -236,6 +227,30 @@ struct Meal {
     date: chrono::DateTime<chrono::Utc>,
 
     recipe_uid: String,
+}
+
+impl Meal {
+    async fn all(context: &Context) -> Result<Vec<Self>, FieldError> {
+        let meals = sqlx::query_as!(Meal, r#"SELECT id, date, name, recipe_uid FROM meal"#)
+            .fetch_all(&context.pool)
+            .await
+            .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))?;
+
+        Ok(meals)
+    }
+
+    async fn by_recipe_uid(context: &Context, recipe_uid: &str) -> Result<Vec<Self>, FieldError> {
+        let meals = sqlx::query_as!(
+            Meal,
+            r#"SELECT id, date, name, recipe_uid FROM meal WHERE recipe_uid = $1"#,
+            recipe_uid
+        )
+        .fetch_all(&context.pool)
+        .await
+        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))?;
+
+        Ok(meals)
+    }
 }
 
 #[graphql_object(context = Context)]
@@ -269,6 +284,30 @@ struct GroceryItem {
     aisle_uid: String,
 
     recipe_uid: Option<String>,
+}
+
+impl GroceryItem {
+    async fn all(context: &Context) -> Result<Vec<Self>, FieldError> {
+        let groceries = sqlx::query_as!(
+            GroceryItem,
+            r#"SELECT
+                id,
+                name,
+                ingredient,
+                quantity,
+                instruction,
+                purchased,
+                aisle_uid,
+                recipe_uid
+            FROM
+                grocery_item"#
+        )
+        .fetch_all(&context.pool)
+        .await
+        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))?;
+
+        Ok(groceries)
+    }
 }
 
 #[graphql_object(context = Context)]
@@ -339,6 +378,200 @@ impl Aisle {
     }
 }
 
+struct Pantry {
+    id: i32,
+    ingredient: String,
+    expiration_date: Option<chrono::DateTime<chrono::Utc>>,
+    in_stock: bool,
+    purchase_date: chrono::DateTime<chrono::Utc>,
+    quantity: String,
+    aisle_uid: String,
+}
+
+impl Pantry {
+    async fn all(context: &Context) -> Result<Vec<Pantry>, FieldError> {
+        sqlx::query_as!(
+            Pantry,
+            r#"SELECT
+                id,
+                ingredient,
+                expiration_date,
+                in_stock,
+                purchase_date,
+                quantity,
+                aisle_uid
+            FROM
+                pantry_item"#
+        )
+        .fetch_all(&context.pool)
+        .await
+        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
+    }
+}
+
+#[graphql_object(context = Context)]
+impl Pantry {
+    fn id(&self) -> i32 {
+        self.id
+    }
+
+    fn ingredient(&self) -> &str {
+        &self.ingredient
+    }
+
+    fn expiration_date(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        self.expiration_date
+    }
+
+    fn in_stock(&self) -> bool {
+        self.in_stock
+    }
+
+    fn purchase_date(&self) -> chrono::DateTime<chrono::Utc> {
+        self.purchase_date
+    }
+
+    fn quantity(&self) -> &str {
+        &self.quantity
+    }
+
+    async fn aisle(&self, context: &Context) -> Result<Aisle, FieldError> {
+        let aisle = Aisle::from_uid(&context, &self.aisle_uid).await?;
+        aisle.ok_or_else(|| FieldError::new("item should always have aisle", graphql_value!(None)))
+    }
+}
+
+struct MealType {
+    id: i32,
+    name: String,
+}
+
+impl MealType {
+    async fn from_uid(context: &Context, uid: &str) -> Result<Option<Self>, FieldError> {
+        sqlx::query_as!(Self, "SELECT id, name FROM meal_type WHERE uid = $1", uid)
+            .fetch_optional(&context.pool)
+            .await
+            .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
+    }
+}
+
+#[graphql_object(context = Context)]
+impl MealType {
+    fn id(&self) -> i32 {
+        self.id
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+struct MenuItem {
+    id: i32,
+    name: String,
+    recipe_uid: String,
+    menu_uid: String,
+    type_uid: String,
+    day: i32,
+}
+
+impl MenuItem {
+    async fn by_menu_uid(context: &Context, menu_uid: &str) -> Result<Vec<Self>, FieldError> {
+        sqlx::query_as!(
+            MenuItem,
+            "SELECT id, name, recipe_uid, menu_uid, type_uid, day FROM menu_item WHERE menu_uid = $1",
+            menu_uid
+        )
+        .fetch_all(&context.pool)
+        .await
+        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
+    }
+}
+
+#[graphql_object(context = Context)]
+impl MenuItem {
+    fn id(&self) -> i32 {
+        self.id
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn day(&self) -> i32 {
+        self.day
+    }
+
+    async fn menu(&self, context: &Context) -> Result<Menu, FieldError> {
+        let menu = Menu::from_uid(&context, &self.menu_uid).await?;
+        menu.ok_or_else(|| FieldError::new("item should always have menu", graphql_value!(None)))
+    }
+
+    async fn recipe(&self, context: &Context) -> Result<Recipe, FieldError> {
+        let recipe = Recipe::from_uid(&context, &self.recipe_uid).await?;
+        recipe
+            .ok_or_else(|| FieldError::new("item should always have recipe", graphql_value!(None)))
+    }
+
+    async fn meal_type(&self, context: &Context) -> Result<MealType, FieldError> {
+        let meal_type = MealType::from_uid(&context, &self.type_uid).await?;
+        meal_type.ok_or_else(|| {
+            FieldError::new("item should always have meal type", graphql_value!(None))
+        })
+    }
+}
+
+struct Menu {
+    id: i32,
+    uid: String,
+    name: String,
+    notes: String,
+    days: i32,
+}
+
+impl Menu {
+    async fn all(context: &Context) -> Result<Vec<Self>, FieldError> {
+        sqlx::query_as!(Self, "SELECT id, uid, name, notes, days FROM menu")
+            .fetch_all(&context.pool)
+            .await
+            .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
+    }
+
+    async fn from_uid(context: &Context, uid: &str) -> Result<Option<Self>, FieldError> {
+        sqlx::query_as!(
+            Self,
+            r"SELECT id, uid, name, notes, days FROM menu WHERE uid = $1",
+            uid
+        )
+        .fetch_optional(&context.pool)
+        .await
+        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
+    }
+}
+
+#[graphql_object(context = Context)]
+impl Menu {
+    fn id(&self) -> i32 {
+        self.id
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn notes(&self) -> &str {
+        &self.notes
+    }
+
+    fn days(&self) -> i32 {
+        self.days
+    }
+
+    async fn items(&self, context: &Context) -> Result<Vec<MenuItem>, FieldError> {
+        MenuItem::by_menu_uid(&context, &self.uid).await
+    }
+}
+
 struct Query;
 
 #[graphql_object(context = Context)]
@@ -351,48 +584,20 @@ impl Query {
         Recipe::all(&context).await
     }
 
-    async fn meal(context: &Context, id: i32) -> Result<Option<Meal>, FieldError> {
-        let meal = sqlx::query_as!(
-            Meal,
-            r#"SELECT id, date, name, recipe_uid FROM meal WHERE id = $1"#,
-            id
-        )
-        .fetch_optional(&context.pool)
-        .await
-        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))?;
-
-        Ok(meal)
-    }
-
     async fn meals(context: &Context) -> Result<Vec<Meal>, FieldError> {
-        let meals = sqlx::query_as!(Meal, r#"SELECT id, date, name, recipe_uid FROM meal"#)
-            .fetch_all(&context.pool)
-            .await
-            .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))?;
-
-        Ok(meals)
+        Meal::all(&context).await
     }
 
     async fn groceries(context: &Context) -> Result<Vec<GroceryItem>, FieldError> {
-        let groceries = sqlx::query_as!(
-            GroceryItem,
-            r#"SELECT
-                id,
-                name,
-                ingredient,
-                quantity,
-                instruction,
-                purchased,
-                aisle_uid,
-                recipe_uid
-            FROM
-                grocery_item"#
-        )
-        .fetch_all(&context.pool)
-        .await
-        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))?;
+        GroceryItem::all(&context).await
+    }
 
-        Ok(groceries)
+    async fn pantry(context: &Context) -> Result<Vec<Pantry>, FieldError> {
+        Pantry::all(&context).await
+    }
+
+    async fn menus(context: &Context) -> Result<Vec<Menu>, FieldError> {
+        Menu::all(&context).await
     }
 }
 
