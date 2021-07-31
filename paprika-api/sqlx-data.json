@@ -181,6 +181,74 @@
       "nullable": []
     }
   },
+  "2bf19c4ae45b3b2a7d167a0275e889c0e2cf4ff135f7704b722bc4a055eb42c3": {
+    "query": "SELECT\n                id,\n                name,\n                ingredient,\n                quantity,\n                instruction,\n                purchased,\n                aisle_uid,\n                list_uid,\n                recipe_uid\n            FROM\n                grocery_item\n            WHERE\n                list_uid = $1",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "ingredient",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "quantity",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "instruction",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 5,
+          "name": "purchased",
+          "type_info": "Bool"
+        },
+        {
+          "ordinal": 6,
+          "name": "aisle_uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "list_uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "recipe_uid",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true
+      ]
+    }
+  },
   "2cf36b0b0f66de7113e062e7ea16f663951e989a4173ba06d86bcc8ef1da868a": {
     "query": "UPDATE pantry_item SET ingredient = $2, aisle = $3, expiration_date = $4, has_expiration = $5, in_stock = $6, purchase_date = $7, quantity = $8, aisle_uid = $9 WHERE uid = $1",
     "describe": {
@@ -201,8 +269,8 @@
       "nullable": []
     }
   },
-  "2d65bbd27f4a796beb46c2775298237a5bbeeb7fb02d57d4d901e08a389c7eea": {
-    "query": "SELECT id, date, name, recipe_uid FROM meal WHERE recipe_uid = $1",
+  "33f1f54b2d68d0aad370941f385c0012a5e1b9b924d6e56136df6e79acc6f6f6": {
+    "query": "SELECT id, filename, recipe_uid, hash FROM photo WHERE recipe_uid = $1",
     "describe": {
       "columns": [
         {
@@ -212,17 +280,17 @@
         },
         {
           "ordinal": 1,
-          "name": "date",
-          "type_info": "Timestamptz"
+          "name": "filename",
+          "type_info": "Text"
         },
         {
           "ordinal": 2,
-          "name": "name",
+          "name": "recipe_uid",
           "type_info": "Text"
         },
         {
           "ordinal": 3,
-          "name": "recipe_uid",
+          "name": "hash",
           "type_info": "Text"
         }
       ],
@@ -594,6 +662,72 @@
       "nullable": []
     }
   },
+  "58c14acc4560b566b359e16a80d5ec4e4d0b00eeb3af0f1b70109380569c98d0": {
+    "query": "SELECT\n                id,\n                name,\n                ingredient,\n                quantity,\n                instruction,\n                purchased,\n                aisle_uid,\n                list_uid,\n                recipe_uid\n            FROM\n                grocery_item",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "ingredient",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "quantity",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "instruction",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 5,
+          "name": "purchased",
+          "type_info": "Bool"
+        },
+        {
+          "ordinal": 6,
+          "name": "aisle_uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "list_uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "recipe_uid",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true
+      ]
+    }
+  },
   "5a3d716295dcc098f7517fdeb6613448aca4c3a3eac99c25c4ea9cde096435fb": {
     "query": "SELECT id, uid, name, parent_uid FROM category WHERE uid = any($1)",
     "describe": {
@@ -629,6 +763,42 @@
         false,
         false,
         true
+      ]
+    }
+  },
+  "5ec8579de324bd107c6fead4e30097295235143b32f61be51ff22fb0f8cdb7be": {
+    "query": "SELECT id, uid, name, is_default FROM grocery_list",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "is_default",
+          "type_info": "Bool"
+        }
+      ],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        false
       ]
     }
   },
@@ -997,66 +1167,6 @@
       "nullable": []
     }
   },
-  "7e56f5d2e24e05eb805acc26aff84952e0779f1fe3d728df6ce4fb95045b9257": {
-    "query": "SELECT\n                id,\n                name,\n                ingredient,\n                quantity,\n                instruction,\n                purchased,\n                aisle_uid,\n                recipe_uid\n            FROM\n                grocery_item",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Int4"
-        },
-        {
-          "ordinal": 1,
-          "name": "name",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 2,
-          "name": "ingredient",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 3,
-          "name": "quantity",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 4,
-          "name": "instruction",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 5,
-          "name": "purchased",
-          "type_info": "Bool"
-        },
-        {
-          "ordinal": 6,
-          "name": "aisle_uid",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 7,
-          "name": "recipe_uid",
-          "type_info": "Text"
-        }
-      ],
-      "parameters": {
-        "Left": []
-      },
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        true
-      ]
-    }
-  },
   "830bb44070978e6f5537f7c3d7ae6225df8ee5fd01f9d776363b7d1b7c393aac": {
     "query": "SELECT id, name, recipe_uid, menu_uid, type_uid, day FROM menu_item WHERE menu_uid = $1",
     "describe": {
@@ -1322,42 +1432,6 @@
         ]
       },
       "nullable": []
-    }
-  },
-  "a1503d0588dd601ae7786d69cc311760471e2bc5422c5bfd24cbe7560f866b9f": {
-    "query": "SELECT id, date, name, recipe_uid FROM meal",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Int4"
-        },
-        {
-          "ordinal": 1,
-          "name": "date",
-          "type_info": "Timestamptz"
-        },
-        {
-          "ordinal": 2,
-          "name": "name",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 3,
-          "name": "recipe_uid",
-          "type_info": "Text"
-        }
-      ],
-      "parameters": {
-        "Left": []
-      },
-      "nullable": [
-        false,
-        false,
-        false,
-        false
-      ]
     }
   },
   "a6231bb1d490e7bd843d1d63a2c52fcbf30b9c2d2d3c4e385e050c4777ad5962": {
@@ -1672,6 +1746,44 @@
       "nullable": []
     }
   },
+  "c8c449349c0e9f9b68a67817ba5adafcd99663dc19a1ec8741a7b9f090d6518c": {
+    "query": "SELECT id, uid, name, is_default FROM grocery_list WHERE uid = $1",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "is_default",
+          "type_info": "Bool"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        false
+      ]
+    }
+  },
   "cbc5fc5c6b8bd8563e166cc071e582e036875fb3a0eb446af614eeb1283b2eaa": {
     "query": "SELECT uid, order_flag, name, parent_uid FROM category",
     "describe": {
@@ -1868,6 +1980,36 @@
       ]
     }
   },
+  "d19d57093e3a28aa44245cdceae26b6e5e747916dd8ba40d5d28ca76d118e27e": {
+    "query": "SELECT id, name, aisle_uid FROM grocery_ingredient",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "aisle_uid",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": [
+        false,
+        false,
+        true
+      ]
+    }
+  },
   "d3b7467a9bb3d889fed99e65da80dfd92bea1f9ddd2d89ea90a45477963d15c9": {
     "query": "UPDATE meal_type SET name = $2, order_flag = $3, color = $4, export_all_day = $5, export_time = $6, original_type = $7 WHERE uid = $1",
     "describe": {
@@ -1985,6 +2127,86 @@
         false,
         false,
         false,
+        false,
+        false,
+        false,
+        false
+      ]
+    }
+  },
+  "da61115a861a6f4e6770261544e1c03b765d5a6b3ceb3b1b4f3cb82e82e4ee3e": {
+    "query": "SELECT id, date, name, recipe_uid, type_uid FROM meal WHERE recipe_uid = $1",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "date",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 2,
+          "name": "name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "recipe_uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "type_uid",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    }
+  },
+  "dac4aea31e4e6284a52da3a12c9131bdfdae3144537c9ec797483b503d01825d": {
+    "query": "SELECT id, filename, recipe_uid, hash FROM photo",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "filename",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "recipe_uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "hash",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": [
         false,
         false,
         false,
@@ -2121,6 +2343,48 @@
         ]
       },
       "nullable": []
+    }
+  },
+  "fdade371408ada297972d1ab3a5c64ee8044ade3445b4fc07af0c819de9a9234": {
+    "query": "SELECT id, date, name, recipe_uid, type_uid FROM meal",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "date",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 2,
+          "name": "name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "recipe_uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "type_uid",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
     }
   }
 }

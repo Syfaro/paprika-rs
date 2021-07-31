@@ -233,15 +233,15 @@ impl Recipe {
     }
 
     async fn meals(&self, context: &Context) -> Result<Vec<Meal>, FieldError> {
-        Meal::by_recipe_uid(&context, &self.uid).await
+        Meal::by_recipe_uid(context, &self.uid).await
     }
 
     async fn categories(&self, context: &Context) -> Result<Vec<Category>, FieldError> {
-        Category::from_uids(&context, &self.categories).await
+        Category::from_uids(context, &self.categories).await
     }
 
     async fn photos(&self, context: &Context) -> Result<Vec<Photo>, FieldError> {
-        Photo::by_recipe_uid(&context, &self.uid).await
+        Photo::by_recipe_uid(context, &self.uid).await
     }
 }
 
@@ -296,11 +296,11 @@ impl Meal {
     }
 
     async fn recipe(&self, context: &Context) -> Result<Option<Recipe>, FieldError> {
-        Recipe::from_uid(&context, &self.recipe_uid).await
+        Recipe::from_uid(context, &self.recipe_uid).await
     }
 
     async fn meal_type(&self, context: &Context) -> Result<MealType, FieldError> {
-        let meal_type = MealType::from_uid(&context, &self.type_uid).await?;
+        let meal_type = MealType::from_uid(context, &self.type_uid).await?;
         meal_type
             .ok_or_else(|| FieldError::new("item should always have aisle", graphql_value!(None)))
     }
@@ -400,16 +400,16 @@ impl GroceryItem {
             None => return Ok(None),
         };
 
-        Recipe::from_uid(&context, &recipe_uid).await
+        Recipe::from_uid(context, recipe_uid).await
     }
 
     async fn aisle(&self, context: &Context) -> Result<Aisle, FieldError> {
-        let aisle = Aisle::from_uid(&context, &self.aisle_uid).await?;
+        let aisle = Aisle::from_uid(context, &self.aisle_uid).await?;
         aisle.ok_or_else(|| FieldError::new("item should always have aisle", graphql_value!(None)))
     }
 
     async fn list(&self, context: &Context) -> Result<GroceryList, FieldError> {
-        let list = GroceryList::from_uid(&context, &self.list_uid).await?;
+        let list = GroceryList::from_uid(context, &self.list_uid).await?;
         list.ok_or_else(|| FieldError::new("item should always have list", graphql_value!(None)))
     }
 }
@@ -499,7 +499,7 @@ impl PantryItem {
     }
 
     async fn aisle(&self, context: &Context) -> Result<Aisle, FieldError> {
-        let aisle = Aisle::from_uid(&context, &self.aisle_uid).await?;
+        let aisle = Aisle::from_uid(context, &self.aisle_uid).await?;
         aisle.ok_or_else(|| FieldError::new("item should always have type", graphql_value!(None)))
     }
 }
@@ -566,18 +566,18 @@ impl MenuItem {
     }
 
     async fn menu(&self, context: &Context) -> Result<Menu, FieldError> {
-        let menu = Menu::from_uid(&context, &self.menu_uid).await?;
+        let menu = Menu::from_uid(context, &self.menu_uid).await?;
         menu.ok_or_else(|| FieldError::new("item should always have menu", graphql_value!(None)))
     }
 
     async fn recipe(&self, context: &Context) -> Result<Recipe, FieldError> {
-        let recipe = Recipe::from_uid(&context, &self.recipe_uid).await?;
+        let recipe = Recipe::from_uid(context, &self.recipe_uid).await?;
         recipe
             .ok_or_else(|| FieldError::new("item should always have recipe", graphql_value!(None)))
     }
 
     async fn meal_type(&self, context: &Context) -> Result<MealType, FieldError> {
-        let meal_type = MealType::from_uid(&context, &self.type_uid).await?;
+        let meal_type = MealType::from_uid(context, &self.type_uid).await?;
         meal_type.ok_or_else(|| {
             FieldError::new("item should always have meal type", graphql_value!(None))
         })
@@ -631,7 +631,7 @@ impl Menu {
     }
 
     async fn items(&self, context: &Context) -> Result<Vec<MenuItem>, FieldError> {
-        MenuItem::by_menu_uid(&context, &self.uid).await
+        MenuItem::by_menu_uid(context, &self.uid).await
     }
 }
 
@@ -715,14 +715,14 @@ impl Category {
 
     async fn parent(&self, context: &Context) -> Result<Option<Self>, FieldError> {
         if let Some(parent_uid) = &self.parent_uid {
-            Category::from_uid(&context, &parent_uid).await
+            Category::from_uid(context, parent_uid).await
         } else {
             Ok(None)
         }
     }
 
     async fn recipes(&self, context: &Context) -> Result<Vec<Recipe>, FieldError> {
-        Recipe::in_category(&context, &self.uid).await
+        Recipe::in_category(context, &self.uid).await
     }
 }
 
@@ -768,7 +768,7 @@ impl Photo {
     }
 
     async fn recipe(&self, context: &Context) -> Result<Recipe, FieldError> {
-        let recipe = Recipe::from_uid(&context, &self.recipe_uid).await?;
+        let recipe = Recipe::from_uid(context, &self.recipe_uid).await?;
         recipe
             .ok_or_else(|| FieldError::new("item should always have recipe", graphql_value!(None)))
     }
@@ -816,7 +816,7 @@ impl GroceryList {
     }
 
     async fn items(&self, context: &Context) -> Result<Vec<GroceryItem>, FieldError> {
-        GroceryItem::by_list_uid(&context, &self.uid).await
+        GroceryItem::by_list_uid(context, &self.uid).await
     }
 }
 
@@ -847,7 +847,7 @@ impl GroceryIngredient {
 
     async fn aisle(&self, context: &Context) -> Result<Option<Aisle>, FieldError> {
         if let Some(aisle_uid) = &self.aisle_uid {
-            Aisle::from_uid(&context, &aisle_uid).await
+            Aisle::from_uid(context, aisle_uid).await
         } else {
             Ok(None)
         }
@@ -859,47 +859,47 @@ struct Query;
 #[graphql_object(context = Context)]
 impl Query {
     async fn recipe(context: &Context, id: i32) -> Result<Option<Recipe>, FieldError> {
-        Recipe::from_id(&context, id).await
+        Recipe::from_id(context, id).await
     }
 
     async fn recipes(context: &Context) -> Result<Vec<Recipe>, FieldError> {
-        Recipe::all(&context).await
+        Recipe::all(context).await
     }
 
     async fn meals(context: &Context) -> Result<Vec<Meal>, FieldError> {
-        Meal::all(&context).await
+        Meal::all(context).await
     }
 
     async fn groceries(context: &Context) -> Result<Vec<GroceryItem>, FieldError> {
-        GroceryItem::all(&context).await
+        GroceryItem::all(context).await
     }
 
     async fn pantry_items(context: &Context) -> Result<Vec<PantryItem>, FieldError> {
-        PantryItem::all(&context).await
+        PantryItem::all(context).await
     }
 
     async fn menus(context: &Context) -> Result<Vec<Menu>, FieldError> {
-        Menu::all(&context).await
+        Menu::all(context).await
     }
 
     async fn bookmarks(context: &Context) -> Result<Vec<Bookmark>, FieldError> {
-        Bookmark::all(&context).await
+        Bookmark::all(context).await
     }
 
     async fn categories(context: &Context) -> Result<Vec<Category>, FieldError> {
-        Category::all(&context).await
+        Category::all(context).await
     }
 
     async fn photos(context: &Context) -> Result<Vec<Photo>, FieldError> {
-        Photo::all(&context).await
+        Photo::all(context).await
     }
 
     async fn grocery_lists(context: &Context) -> Result<Vec<GroceryList>, FieldError> {
-        GroceryList::all(&context).await
+        GroceryList::all(context).await
     }
 
     async fn grocery_ingredients(context: &Context) -> Result<Vec<GroceryIngredient>, FieldError> {
-        GroceryIngredient::all(&context).await
+        GroceryIngredient::all(context).await
     }
 }
 

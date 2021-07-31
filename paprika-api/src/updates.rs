@@ -34,21 +34,21 @@ pub async fn check_for_updates(
         if !matches_latest {
             tracing::info!("section {} needs update", name);
             let item_changes = match name.as_str() {
-                "menus" => update_collection::<PaprikaMenu>(&paprika, &pool).await?,
-                "photos" => update_collection::<PaprikaPhoto>(&paprika, &pool).await?,
-                "mealtypes" => update_collection::<PaprikaMealType>(&paprika, &pool).await?,
-                "recipes" => update_collection::<PaprikaRecipeHash>(&paprika, &pool).await?,
-                "pantry" => update_collection::<PaprikaPantryItem>(&paprika, &pool).await?,
-                "meals" => update_collection::<PaprikaMeal>(&paprika, &pool).await?,
+                "menus" => update_collection::<PaprikaMenu>(paprika, pool).await?,
+                "photos" => update_collection::<PaprikaPhoto>(paprika, pool).await?,
+                "mealtypes" => update_collection::<PaprikaMealType>(paprika, pool).await?,
+                "recipes" => update_collection::<PaprikaRecipeHash>(paprika, pool).await?,
+                "pantry" => update_collection::<PaprikaPantryItem>(paprika, pool).await?,
+                "meals" => update_collection::<PaprikaMeal>(paprika, pool).await?,
                 "groceryingredients" => {
-                    update_collection::<PaprikaGroceryIngredient>(&paprika, &pool).await?
+                    update_collection::<PaprikaGroceryIngredient>(paprika, pool).await?
                 }
-                "groceries" => update_collection::<PaprikaGroceryItem>(&paprika, &pool).await?,
-                "groceryaisles" => update_collection::<PaprikaAisle>(&paprika, &pool).await?,
-                "grocerylists" => update_collection::<PaprikaGroceryList>(&paprika, &pool).await?,
-                "bookmarks" => update_collection::<PaprikaBookmark>(&paprika, &pool).await?,
-                "menuitems" => update_collection::<PaprikaMenuItem>(&paprika, &pool).await?,
-                "categories" => update_collection::<PaprikaCategory>(&paprika, &pool).await?,
+                "groceries" => update_collection::<PaprikaGroceryItem>(paprika, pool).await?,
+                "groceryaisles" => update_collection::<PaprikaAisle>(paprika, pool).await?,
+                "grocerylists" => update_collection::<PaprikaGroceryList>(paprika, pool).await?,
+                "bookmarks" => update_collection::<PaprikaBookmark>(paprika, pool).await?,
+                "menuitems" => update_collection::<PaprikaMenuItem>(paprika, pool).await?,
+                "categories" => update_collection::<PaprikaCategory>(paprika, pool).await?,
                 _ => unreachable!("unknown paprika changed item"),
             };
 
