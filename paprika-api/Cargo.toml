@@ -15,8 +15,11 @@ serde_json = "1"
 
 actix-web = "4.0.0-beta.8"
 actix-cors = "0.6.0-beta.2"
+
 juniper = "0.15"
 juniper_actix = "0.4"
+dataloader = { version = "0.14", default-features = false, features = ["runtime-tokio"] }
+
 chrono = { version = "0.4", features = ["serde"] }
 
 paprika-client = { path = "../paprika-client" }

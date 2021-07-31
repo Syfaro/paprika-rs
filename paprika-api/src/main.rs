@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use actix_cors::Cors;
 use actix_web::{http::header, web, App, Error, HttpRequest, HttpResponse, HttpServer};
+use dataloader::{cached::Loader, BatchFn};
 use juniper::{
     graphql_object, graphql_value, EmptySubscription, FieldError, GraphQLObject, RootNode,
 };
@@ -43,6 +44,7 @@ async fn main() {
             .app_data(web::Data::new(Context {
                 pool: pool.clone(),
                 paprika: paprika.clone(),
+                meal_type_loader: Loader::new(MealTypeBatcher(pool.clone())),
             }))
             .app_data(web::Data::new(Schema::new(
                 Query,
@@ -71,10 +73,15 @@ async fn main() {
     .unwrap();
 }
 
+#[derive(Clone, Copy, Debug)]
+struct DbError;
+
 #[derive(Clone)]
 struct Context {
     pool: sqlx::Pool<sqlx::Postgres>,
     paprika: Arc<PaprikaClient>,
+
+    meal_type_loader: Loader<String, Result<MealType, DbError>, MealTypeBatcher>,
 }
 
 impl juniper::Context for Context {}
@@ -300,9 +307,13 @@ impl Meal {
     }
 
     async fn meal_type(&self, context: &Context) -> Result<MealType, FieldError> {
-        let meal_type = MealType::from_uid(context, &self.type_uid).await?;
-        meal_type
-            .ok_or_else(|| FieldError::new("item should always have aisle", graphql_value!(None)))
+        context
+            .meal_type_loader
+            .load(self.type_uid.clone())
+            .await
+            .map_err(|_err| {
+                FieldError::new("item should always have meal type", graphql_value!(None))
+            })
     }
 }
 
@@ -499,18 +510,11 @@ impl PantryItem {
     }
 }
 
+#[derive(Debug, Clone)]
 struct MealType {
     id: i32,
+    uid: String,
     name: String,
-}
-
-impl MealType {
-    async fn from_uid(context: &Context, uid: &str) -> Result<Option<Self>, FieldError> {
-        sqlx::query_as!(Self, "SELECT id, name FROM meal_type WHERE uid = $1", uid)
-            .fetch_optional(&context.pool)
-            .await
-            .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
-    }
 }
 
 #[graphql_object(context = Context)]
@@ -521,6 +525,32 @@ impl MealType {
 
     fn name(&self) -> &str {
         &self.name
+    }
+}
+
+struct MealTypeBatcher(sqlx::Pool<sqlx::Postgres>);
+
+#[async_trait::async_trait]
+impl BatchFn<String, Result<MealType, DbError>> for MealTypeBatcher {
+    async fn load(
+        &mut self,
+        keys: &[String],
+    ) -> std::collections::HashMap<String, Result<MealType, DbError>> {
+        let meal_types = sqlx::query_as!(
+            MealType,
+            "SELECT id, uid, name FROM meal_type WHERE uid = any($1)",
+            keys
+        )
+        .fetch_all(&self.0)
+        .await;
+
+        match meal_types {
+            Ok(meal_types) => meal_types
+                .into_iter()
+                .map(|meal_type| (meal_type.uid.clone(), Ok(meal_type)))
+                .collect(),
+            Err(_err) => keys.iter().map(|k| (k.to_owned(), Err(DbError))).collect(),
+        }
     }
 }
 
@@ -572,10 +602,13 @@ impl MenuItem {
     }
 
     async fn meal_type(&self, context: &Context) -> Result<MealType, FieldError> {
-        let meal_type = MealType::from_uid(context, &self.type_uid).await?;
-        meal_type.ok_or_else(|| {
-            FieldError::new("item should always have meal type", graphql_value!(None))
-        })
+        context
+            .meal_type_loader
+            .load(self.type_uid.clone())
+            .await
+            .map_err(|_err| {
+                FieldError::new("item should always have meal type", graphql_value!(None))
+            })
     }
 }
 
@@ -904,14 +937,9 @@ struct Mutation;
 impl Mutation {
     async fn sync(context: &Context) -> Result<bool, FieldError> {
         let changes = updates::check_for_updates(&context.paprika, &context.pool).await?;
-        let had_changes = if changes.contains_key(&State::Added)
+        let had_changes = changes.contains_key(&State::Added)
             || changes.contains_key(&State::Deleted)
-            || changes.contains_key(&State::Changed)
-        {
-            true
-        } else {
-            false
-        };
+            || changes.contains_key(&State::Changed);
 
         Ok(had_changes)
     }
