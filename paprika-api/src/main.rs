@@ -102,14 +102,14 @@ impl Recipe {
             r#"SELECT
                 id,
                 uid,
-                data->>'name' "name!",
-                data->>'cook_time' "cook_time",
-                data->>'prep_time' "prep_time",
-                data->>'total_time' "total_time",
-                data->>'description' "description",
-                data->>'directions' "directions!",
-                data->>'ingredients' "ingredients!",
-                data->>'notes' "notes!"
+                name,
+                cook_time,
+                prep_time,
+                total_time,
+                description,
+                directions,
+                ingredients,
+                notes
             FROM
                 recipe"#
         )
@@ -129,14 +129,14 @@ impl Recipe {
             r#"SELECT
                 id,
                 uid,
-                data->>'name' "name!",
-                data->>'cook_time' "cook_time",
-                data->>'prep_time' "prep_time",
-                data->>'total_time' "total_time",
-                data->>'description' "description",
-                data->>'directions' "directions!",
-                data->>'ingredients' "ingredients!",
-                data->>'notes' "notes!"
+                name,
+                cook_time,
+                prep_time,
+                total_time,
+                description,
+                directions,
+                ingredients,
+                notes
             FROM
                 recipe
             WHERE
@@ -154,14 +154,14 @@ impl Recipe {
             r#"SELECT
                 id,
                 uid,
-                data->>'name' "name!",
-                data->>'cook_time' "cook_time",
-                data->>'prep_time' "prep_time",
-                data->>'total_time' "total_time",
-                data->>'description' "description",
-                data->>'directions' "directions!",
-                data->>'ingredients' "ingredients!",
-                data->>'notes' "notes!"
+                name,
+                cook_time,
+                prep_time,
+                total_time,
+                description,
+                directions,
+                ingredients,
+                notes
             FROM
                 recipe
             WHERE
@@ -219,7 +219,8 @@ impl Recipe {
     async fn meals(&self, context: &Context) -> Result<Vec<Meal>, FieldError> {
         let meals = sqlx::query_as!(
             Meal,
-            r#"SELECT id, date, data->>'name' "name!", data->>'recipe_uid' recipe_uid FROM meal WHERE recipe_uid = $1"#, self.uid
+            r#"SELECT id, date, name, recipe_uid FROM meal WHERE recipe_uid = $1"#,
+            self.uid
         )
         .fetch_all(&context.pool)
         .await
@@ -234,7 +235,7 @@ struct Meal {
     name: String,
     date: chrono::DateTime<chrono::Utc>,
 
-    recipe_uid: Option<String>,
+    recipe_uid: String,
 }
 
 #[graphql_object(context = Context)]
@@ -252,12 +253,7 @@ impl Meal {
     }
 
     async fn recipe(&self, context: &Context) -> Result<Option<Recipe>, FieldError> {
-        let recipe_uid = match &self.recipe_uid {
-            Some(recipe_uid) => recipe_uid,
-            None => return Ok(None),
-        };
-
-        Recipe::from_uid(&context, &recipe_uid).await
+        Recipe::from_uid(&context, &self.recipe_uid).await
     }
 }
 
@@ -266,8 +262,8 @@ struct GroceryItem {
 
     name: String,
     ingredient: String,
-    quantity: Option<String>,
-    instruction: Option<String>,
+    quantity: String,
+    instruction: String,
 
     purchased: bool,
     aisle_uid: String,
@@ -289,12 +285,12 @@ impl GroceryItem {
         &self.ingredient
     }
 
-    fn quantity(&self) -> Option<&str> {
-        self.quantity.as_deref()
+    fn quantity(&self) -> &str {
+        &self.quantity
     }
 
-    fn instruction(&self) -> Option<&str> {
-        self.instruction.as_deref()
+    fn instruction(&self) -> &str {
+        &self.instruction
     }
 
     fn purchased(&self) -> bool {
@@ -329,8 +325,8 @@ impl Aisle {
             Aisle,
             r#"SELECT
                 id,
-                data->>'name' "name!",
-                (data->'order_flag')::integer "order_flag!"
+                name,
+                order_flag
             FROM
                 aisle
             WHERE
@@ -358,7 +354,8 @@ impl Query {
     async fn meal(context: &Context, id: i32) -> Result<Option<Meal>, FieldError> {
         let meal = sqlx::query_as!(
             Meal,
-            r#"SELECT id, date, data->>'name' "name!", data->>'recipe_uid' recipe_uid FROM meal WHERE id = $1"#, id
+            r#"SELECT id, date, name, recipe_uid FROM meal WHERE id = $1"#,
+            id
         )
         .fetch_optional(&context.pool)
         .await
@@ -368,13 +365,10 @@ impl Query {
     }
 
     async fn meals(context: &Context) -> Result<Vec<Meal>, FieldError> {
-        let meals = sqlx::query_as!(
-            Meal,
-            r#"SELECT id, date, data->>'name' "name!", data->>'recipe_uid' recipe_uid FROM meal"#
-        )
-        .fetch_all(&context.pool)
-        .await
-        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))?;
+        let meals = sqlx::query_as!(Meal, r#"SELECT id, date, name, recipe_uid FROM meal"#)
+            .fetch_all(&context.pool)
+            .await
+            .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))?;
 
         Ok(meals)
     }
@@ -384,13 +378,13 @@ impl Query {
             GroceryItem,
             r#"SELECT
                 id,
-                data->>'name' "name!",
-                data->>'ingredient' "ingredient!",
-                data->>'quantity' quantity,
-                data->>'instruction' instruction,
-                (data->'purchased')::boolean "purchased!",
-                data->>'aisle_uid' "aisle_uid!",
-                data->>'recipe_uid' recipe_uid
+                name,
+                ingredient,
+                quantity,
+                instruction,
+                purchased,
+                aisle_uid,
+                recipe_uid
             FROM
                 grocery_item"#
         )

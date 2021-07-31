@@ -200,10 +200,34 @@ impl UpdateItem for PaprikaRecipeHash {
         let recipe = paprika.recipe(&new_item.uid).await?;
 
         sqlx::query!(
-            "INSERT INTO recipe (uid, hash, data) VALUES ($1, $2, $3)",
-            recipe.uid,
+            "INSERT INTO recipe (cook_time, created, description, difficulty, directions, hash, image_url, in_trash, ingredients, is_pinned, name, notes, on_favorites, on_grocery_list, photo, photo_hash, photo_large, photo_url, prep_time, rating, scale, servings, source, source_url, total_time, uid)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)",
+            recipe.cook_time,
+            recipe.created,
+            recipe.description,
+            recipe.difficulty,
+            recipe.directions,
             recipe.hash,
-            serde_json::to_value(&recipe)?
+            recipe.image_url,
+            recipe.in_trash,
+            recipe.ingredients,
+            recipe.is_pinned,
+            recipe.name,
+            recipe.notes,
+            recipe.on_favorites,
+            recipe.on_grocery_list,
+            recipe.photo,
+            recipe.photo_hash,
+            recipe.photo_large,
+            recipe.photo_url,
+            recipe.prep_time,
+            recipe.rating,
+            recipe.scale,
+            recipe.servings,
+            recipe.source,
+            recipe.source_url,
+            recipe.total_time,
+            recipe.uid,
         )
         .execute(pool)
         .await?;
@@ -219,10 +243,59 @@ impl UpdateItem for PaprikaRecipeHash {
         let recipe = paprika.recipe(&new_item.uid).await?;
 
         sqlx::query!(
-            "UPDATE recipe SET hash = $2, data = $3 WHERE uid = $1",
+            "UPDATE recipe SET
+                cook_time = $2,
+                created = $3,
+                description = $4,
+                difficulty = $5,
+                directions = $6,
+                hash = $7,
+                image_url = $8,
+                in_trash = $9,
+                ingredients = $10,
+                is_pinned = $11,
+                name = $12,
+                notes = $13,
+                on_favorites = $14,
+                on_grocery_list = $15,
+                photo = $16,
+                photo_hash = $17,
+                photo_large = $18,
+                photo_url = $19,
+                prep_time = $20,
+                rating = $21,
+                scale = $22,
+                servings = $23,
+                source = $24,
+                source_url = $25,
+                total_time = $26
+            WHERE uid = $1",
             recipe.uid,
+            recipe.cook_time,
+            recipe.created,
+            recipe.description,
+            recipe.difficulty,
+            recipe.directions,
             recipe.hash,
-            serde_json::to_value(&recipe)?
+            recipe.image_url,
+            recipe.in_trash,
+            recipe.ingredients,
+            recipe.is_pinned,
+            recipe.name,
+            recipe.notes,
+            recipe.on_favorites,
+            recipe.on_grocery_list,
+            recipe.photo,
+            recipe.photo_hash,
+            recipe.photo_large,
+            recipe.photo_url,
+            recipe.prep_time,
+            recipe.rating,
+            recipe.scale,
+            recipe.servings,
+            recipe.source,
+            recipe.source_url,
+            recipe.total_time
         )
         .execute(pool)
         .await?;
@@ -246,12 +319,14 @@ impl UpdateItem for PaprikaRecipeHash {
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaMeal {
     async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
-        let meals = sqlx::query!("SELECT data FROM meal")
-            .map(|row| serde_json::from_value(row.data).unwrap())
-            .fetch_all(pool)
-            .await?
-            .into_iter()
-            .collect();
+        let meals = sqlx::query_as!(
+            Self,
+            "SELECT uid, recipe_uid, date, meal_type, name, order_flag, type_uid FROM meal"
+        )
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .collect();
         Ok(meals)
     }
 
@@ -266,11 +341,14 @@ impl UpdateItem for PaprikaMeal {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "INSERT INTO meal (uid, recipe_uid, date, data) VALUES ($1, $2, $3, $4)",
+            "INSERT INTO meal (uid, recipe_uid, date, meal_type, name, order_flag, type_uid) VALUES ($1, $2, $3, $4, $5, $6, $7)",
             new_item.uid,
             new_item.recipe_uid,
             new_item.date,
-            serde_json::to_value(&new_item)?
+            new_item.meal_type,
+            new_item.name,
+            new_item.order_flag,
+            new_item.type_uid
         )
         .execute(pool)
         .await?;
@@ -283,11 +361,14 @@ impl UpdateItem for PaprikaMeal {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "UPDATE meal SET recipe_uid = $2, date = $3, data = $4 WHERE uid = $1",
+            "UPDATE meal SET recipe_uid = $2, date = $3, meal_type = $4, name = $5, order_flag = $6, type_uid = $7 WHERE uid = $1",
             new_item.uid,
             new_item.recipe_uid,
             new_item.date,
-            serde_json::to_value(&new_item)?
+            new_item.meal_type,
+            new_item.name,
+            new_item.order_flag,
+            new_item.type_uid
         )
         .execute(pool)
         .await?;
@@ -309,8 +390,7 @@ impl UpdateItem for PaprikaMeal {
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaGroceryItem {
     async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
-        let groceries = sqlx::query!("SELECT data FROM grocery_item")
-            .map(|row| serde_json::from_value(row.data).unwrap())
+        let groceries = sqlx::query_as!(Self, "SELECT uid, recipe_uid, name, order_flag, purchased, aisle, ingredient, recipe, instruction, quantity, separate, aisle_uid, list_uid FROM grocery_item")
             .fetch_all(pool)
             .await?
             .into_iter()
@@ -329,9 +409,20 @@ impl UpdateItem for PaprikaGroceryItem {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "INSERT INTO grocery_item (uid, data) VALUES ($1, $2)",
+            "INSERT INTO grocery_item (uid, recipe_uid, name, order_flag, purchased, aisle, ingredient, recipe, instruction, quantity, separate, aisle_uid, list_uid) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.recipe_uid,
+            new_item.name,
+            new_item.order_flag,
+            new_item.purchased,
+            new_item.aisle,
+            new_item.ingredient,
+            new_item.recipe,
+            new_item.instruction,
+            new_item.quantity,
+            new_item.separate,
+            new_item.aisle_uid,
+            new_item.list_uid
         )
         .execute(pool)
         .await?;
@@ -344,9 +435,20 @@ impl UpdateItem for PaprikaGroceryItem {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "UPDATE grocery_item SET data = $2 WHERE uid = $1",
+            "UPDATE grocery_item SET recipe_uid = $2, name = $3, order_flag = $4, purchased = $5, aisle = $6, ingredient = $7, recipe = $8, instruction = $9, quantity = $10, separate = $11, aisle_uid = $12, list_uid = $13 WHERE uid = $1",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.recipe_uid,
+            new_item.name,
+            new_item.order_flag,
+            new_item.purchased,
+            new_item.aisle,
+            new_item.ingredient,
+            new_item.recipe,
+            new_item.instruction,
+            new_item.quantity,
+            new_item.separate,
+            new_item.aisle_uid,
+            new_item.list_uid
         )
         .execute(pool)
         .await?;
@@ -368,8 +470,7 @@ impl UpdateItem for PaprikaGroceryItem {
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaAisle {
     async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
-        let aisles = sqlx::query!("SELECT data FROM aisle")
-            .map(|row| serde_json::from_value(row.data).unwrap())
+        let aisles = sqlx::query_as!(Self, "SELECT uid, name, order_flag FROM aisle")
             .fetch_all(pool)
             .await?
             .into_iter()
@@ -388,10 +489,10 @@ impl UpdateItem for PaprikaAisle {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "INSERT INTO aisle (uid, name, data) VALUES ($1, $2, $3)",
+            "INSERT INTO aisle (uid, name, order_flag) VALUES ($1, $2, $3)",
             new_item.uid,
             new_item.name,
-            serde_json::to_value(&new_item)?
+            new_item.order_flag
         )
         .execute(pool)
         .await?;
@@ -404,10 +505,10 @@ impl UpdateItem for PaprikaAisle {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "UPDATE aisle SET name = $2, data = $3 WHERE uid = $1",
+            "UPDATE aisle SET name = $2, order_flag = $3 WHERE uid = $1",
             new_item.uid,
             new_item.name,
-            serde_json::to_value(&new_item)?
+            new_item.order_flag
         )
         .execute(pool)
         .await?;
@@ -429,8 +530,7 @@ impl UpdateItem for PaprikaAisle {
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaMenu {
     async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
-        let menus = sqlx::query!("SELECT data FROM menu")
-            .map(|row| serde_json::from_value(row.data).unwrap())
+        let menus = sqlx::query_as!(Self, "SELECT uid, name, notes, order_flag, days FROM menu")
             .fetch_all(pool)
             .await?
             .into_iter()
@@ -449,9 +549,12 @@ impl UpdateItem for PaprikaMenu {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "INSERT INTO menu (uid, data) VALUES ($1, $2)",
+            "INSERT INTO menu (uid, name, notes, order_flag, days) VALUES ($1, $2, $3, $4, $5)",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.name,
+            new_item.notes,
+            new_item.order_flag,
+            new_item.days
         )
         .execute(pool)
         .await?;
@@ -464,9 +567,12 @@ impl UpdateItem for PaprikaMenu {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "UPDATE menu SET data = $2 WHERE uid = $1",
+            "UPDATE menu SET name = $2, notes = $3, order_flag = $4, days = $5 WHERE uid = $1",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.name,
+            new_item.notes,
+            new_item.order_flag,
+            new_item.days
         )
         .execute(pool)
         .await?;
@@ -488,12 +594,14 @@ impl UpdateItem for PaprikaMenu {
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaPhoto {
     async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
-        let photos = sqlx::query!("SELECT data FROM photo")
-            .map(|row| serde_json::from_value(row.data).unwrap())
-            .fetch_all(pool)
-            .await?
-            .into_iter()
-            .collect();
+        let photos = sqlx::query_as!(
+            Self,
+            "SELECT uid, filename, recipe_uid, order_flag, name, hash FROM photo"
+        )
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .collect();
         Ok(photos)
     }
 
@@ -508,9 +616,13 @@ impl UpdateItem for PaprikaPhoto {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "INSERT INTO photo (uid, data) VALUES ($1, $2)",
+            "INSERT INTO photo (uid, filename, recipe_uid, order_flag, name, hash) VALUES ($1, $2, $3, $4, $5, $6)",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.filename,
+            new_item.recipe_uid,
+            new_item.order_flag,
+            new_item.name,
+            new_item.hash
         )
         .execute(pool)
         .await?;
@@ -523,9 +635,13 @@ impl UpdateItem for PaprikaPhoto {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "UPDATE photo SET data = $2 WHERE uid = $1",
+            "UPDATE photo SET filename = $2, recipe_uid = $3, order_flag = $4, name = $5, hash = $6 WHERE uid = $1",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.filename,
+            new_item.recipe_uid,
+            new_item.order_flag,
+            new_item.name,
+            new_item.hash
         )
         .execute(pool)
         .await?;
@@ -547,8 +663,7 @@ impl UpdateItem for PaprikaPhoto {
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaMealType {
     async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
-        let meal_types = sqlx::query!("SELECT data FROM meal_type")
-            .map(|row| serde_json::from_value(row.data).unwrap())
+        let meal_types = sqlx::query_as!(Self, "SELECT uid, name, order_flag, color, export_all_day, export_time, original_type FROM meal_type")
             .fetch_all(pool)
             .await?
             .into_iter()
@@ -567,9 +682,14 @@ impl UpdateItem for PaprikaMealType {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "INSERT INTO meal_type (uid, data) VALUES ($1, $2)",
+            "INSERT INTO meal_type (uid, name, order_flag, color, export_all_day, export_time, original_type) VALUES ($1, $2, $3, $4, $5, $6, $7)",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.name,
+            new_item.order_flag,
+            new_item.color,
+            new_item.export_all_day,
+            new_item.export_time,
+            new_item.original_type
         )
         .execute(pool)
         .await?;
@@ -582,9 +702,14 @@ impl UpdateItem for PaprikaMealType {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "UPDATE meal_type SET data = $2 WHERE uid = $1",
+            "UPDATE meal_type SET name = $2, order_flag = $3, color = $4, export_all_day = $5, export_time = $6, original_type = $7 WHERE uid = $1",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.name,
+            new_item.order_flag,
+            new_item.color,
+            new_item.export_all_day,
+            new_item.export_time,
+            new_item.original_type
         )
         .execute(pool)
         .await?;
@@ -606,8 +731,7 @@ impl UpdateItem for PaprikaMealType {
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaPantryItem {
     async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
-        let pantry_items = sqlx::query!("SELECT data FROM pantry_item")
-            .map(|row| serde_json::from_value(row.data).unwrap())
+        let pantry_items = sqlx::query_as!(Self, "SELECT uid, ingredient, aisle, expiration_date, has_expiration, in_stock, purchase_date, quantity, aisle_uid FROM pantry_item")
             .fetch_all(pool)
             .await?
             .into_iter()
@@ -626,9 +750,16 @@ impl UpdateItem for PaprikaPantryItem {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "INSERT INTO pantry_item (uid, data) VALUES ($1, $2)",
+            "INSERT INTO pantry_item (uid, ingredient, aisle, expiration_date, has_expiration, in_stock, purchase_date, quantity, aisle_uid) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.ingredient,
+            new_item.aisle,
+            new_item.expiration_date,
+            new_item.has_expiration,
+            new_item.in_stock,
+            new_item.purchase_date,
+            new_item.quantity,
+            new_item.aisle_uid
         )
         .execute(pool)
         .await?;
@@ -641,9 +772,16 @@ impl UpdateItem for PaprikaPantryItem {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "UPDATE pantry_item SET data = $2 WHERE uid = $1",
+            "UPDATE pantry_item SET ingredient = $2, aisle = $3, expiration_date = $4, has_expiration = $5, in_stock = $6, purchase_date = $7, quantity = $8, aisle_uid = $9 WHERE uid = $1",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.ingredient,
+            new_item.aisle,
+            new_item.expiration_date,
+            new_item.has_expiration,
+            new_item.in_stock,
+            new_item.purchase_date,
+            new_item.quantity,
+            new_item.aisle_uid
         )
         .execute(pool)
         .await?;
@@ -665,12 +803,12 @@ impl UpdateItem for PaprikaPantryItem {
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaGroceryIngredient {
     async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
-        let grocery_ingredients = sqlx::query!("SELECT data FROM grocery_ingredient")
-            .map(|row| serde_json::from_value(row.data).unwrap())
-            .fetch_all(pool)
-            .await?
-            .into_iter()
-            .collect();
+        let grocery_ingredients =
+            sqlx::query_as!(Self, "SELECT uid, name, aisle_uid FROM grocery_ingredient")
+                .fetch_all(pool)
+                .await?
+                .into_iter()
+                .collect();
         Ok(grocery_ingredients)
     }
 
@@ -685,9 +823,10 @@ impl UpdateItem for PaprikaGroceryIngredient {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "INSERT INTO grocery_ingredient (uid, data) VALUES ($1, $2)",
+            "INSERT INTO grocery_ingredient (uid, name, aisle_uid) VALUES ($1, $2, $3)",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.name,
+            new_item.aisle_uid
         )
         .execute(pool)
         .await?;
@@ -700,9 +839,10 @@ impl UpdateItem for PaprikaGroceryIngredient {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "UPDATE grocery_ingredient SET data = $2 WHERE uid = $1",
+            "UPDATE grocery_ingredient SET name = $2, aisle_uid = $3 WHERE uid = $1",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.name,
+            new_item.aisle_uid
         )
         .execute(pool)
         .await?;
@@ -727,12 +867,14 @@ impl UpdateItem for PaprikaGroceryIngredient {
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaGroceryList {
     async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
-        let grocery_lists = sqlx::query!("SELECT data FROM grocery_list")
-            .map(|row| serde_json::from_value(row.data).unwrap())
-            .fetch_all(pool)
-            .await?
-            .into_iter()
-            .collect();
+        let grocery_lists = sqlx::query_as!(
+            Self,
+            "SELECT uid, name, order_flag, is_default, reminders_list FROM grocery_list"
+        )
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .collect();
         Ok(grocery_lists)
     }
 
@@ -747,9 +889,12 @@ impl UpdateItem for PaprikaGroceryList {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "INSERT INTO grocery_list (uid, data) VALUES ($1, $2)",
+            "INSERT INTO grocery_list (uid, name, order_flag, is_default, reminders_list) VALUES ($1, $2, $3, $4, $5)",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.name,
+            new_item.order_flag,
+            new_item.is_default,
+            new_item.reminders_list
         )
         .execute(pool)
         .await?;
@@ -762,9 +907,12 @@ impl UpdateItem for PaprikaGroceryList {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "UPDATE grocery_list SET data = $2 WHERE uid = $1",
+            "UPDATE grocery_list SET name = $2, order_flag = $3, is_default = $4, reminders_list = $5 WHERE uid = $1",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.name,
+            new_item.order_flag,
+            new_item.is_default,
+            new_item.reminders_list
         )
         .execute(pool)
         .await?;
@@ -786,8 +934,7 @@ impl UpdateItem for PaprikaGroceryList {
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaBookmark {
     async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
-        let bookmarks = sqlx::query!("SELECT data FROM bookmark")
-            .map(|row| serde_json::from_value(row.data).unwrap())
+        let bookmarks = sqlx::query_as!(Self, "SELECT uid, title, url, order_flag FROM bookmark")
             .fetch_all(pool)
             .await?
             .into_iter()
@@ -806,9 +953,11 @@ impl UpdateItem for PaprikaBookmark {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "INSERT INTO bookmark (uid, data) VALUES ($1, $2)",
+            "INSERT INTO bookmark (uid, title, url, order_flag) VALUES ($1, $2, $3, $4)",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.title,
+            new_item.url,
+            new_item.order_flag
         )
         .execute(pool)
         .await?;
@@ -821,9 +970,11 @@ impl UpdateItem for PaprikaBookmark {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "UPDATE bookmark SET data = $2 WHERE uid = $1",
+            "UPDATE bookmark SET title = $2, url = $3, order_flag = $4 WHERE uid = $1",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.title,
+            new_item.url,
+            new_item.order_flag
         )
         .execute(pool)
         .await?;
@@ -845,12 +996,14 @@ impl UpdateItem for PaprikaBookmark {
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaMenuItem {
     async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
-        let menu_items = sqlx::query!("SELECT data FROM menu_item")
-            .map(|row| serde_json::from_value(row.data).unwrap())
-            .fetch_all(pool)
-            .await?
-            .into_iter()
-            .collect();
+        let menu_items = sqlx::query_as!(
+            Self,
+            "SELECT uid, name, order_flag, recipe_uid, menu_uid, type_uid, day FROM menu_item"
+        )
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .collect();
         Ok(menu_items)
     }
 
@@ -865,9 +1018,14 @@ impl UpdateItem for PaprikaMenuItem {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "INSERT INTO menu_item (uid, data) VALUES ($1, $2)",
+            "INSERT INTO menu_item (uid, name, order_flag, recipe_uid, menu_uid, type_uid, day) VALUES ($1, $2, $3, $4, $5, $6, $7)",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.name,
+            new_item.order_flag,
+            new_item.recipe_uid,
+            new_item.menu_uid,
+            new_item.type_uid,
+            new_item.day
         )
         .execute(pool)
         .await?;
@@ -880,9 +1038,14 @@ impl UpdateItem for PaprikaMenuItem {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "UPDATE menu_item SET data = $2 WHERE uid = $1",
+            "UPDATE menu_item SET name = $2, order_flag = $3, recipe_uid = $4, menu_uid = $5, type_uid = $6, day = $7 WHERE uid = $1",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.name,
+            new_item.order_flag,
+            new_item.recipe_uid,
+            new_item.menu_uid,
+            new_item.type_uid,
+            new_item.day
         )
         .execute(pool)
         .await?;
@@ -904,12 +1067,14 @@ impl UpdateItem for PaprikaMenuItem {
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaCategory {
     async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
-        let categories = sqlx::query!("SELECT data FROM category")
-            .map(|row| serde_json::from_value(row.data).unwrap())
-            .fetch_all(pool)
-            .await?
-            .into_iter()
-            .collect();
+        let categories = sqlx::query_as!(
+            Self,
+            "SELECT uid, order_flag, name, parent_uid FROM category"
+        )
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .collect();
         Ok(categories)
     }
 
@@ -924,9 +1089,11 @@ impl UpdateItem for PaprikaCategory {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "INSERT INTO category (uid, data) VALUES ($1, $2)",
+            "INSERT INTO category (uid, order_flag, name, parent_uid) VALUES ($1, $2, $3, $4)",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.order_flag,
+            new_item.name,
+            new_item.parent_uid
         )
         .execute(pool)
         .await?;
@@ -939,9 +1106,11 @@ impl UpdateItem for PaprikaCategory {
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
-            "UPDATE category SET data = $2 WHERE uid = $1",
+            "UPDATE category SET order_flag = $2, name = $3, parent_uid = $4 WHERE uid = $1",
             new_item.uid,
-            serde_json::to_value(&new_item)?
+            new_item.order_flag,
+            new_item.name,
+            new_item.parent_uid
         )
         .execute(pool)
         .await?;
