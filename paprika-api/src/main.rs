@@ -93,6 +93,8 @@ struct Recipe {
     directions: String,
     ingredients: String,
     notes: String,
+
+    categories: Vec<String>,
 }
 
 impl Recipe {
@@ -109,7 +111,8 @@ impl Recipe {
                 description,
                 directions,
                 ingredients,
-                notes
+                notes,
+                categories
             FROM
                 recipe"#
         )
@@ -136,7 +139,8 @@ impl Recipe {
                 description,
                 directions,
                 ingredients,
-                notes
+                notes,
+                categories
             FROM
                 recipe
             WHERE
@@ -161,7 +165,8 @@ impl Recipe {
                 description,
                 directions,
                 ingredients,
-                notes
+                notes,
+                categories
             FROM
                 recipe
             WHERE
@@ -169,6 +174,17 @@ impl Recipe {
             uid
         )
         .fetch_optional(&context.pool)
+        .await
+        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
+    }
+
+    async fn in_category(context: &Context, category_uid: &str) -> Result<Vec<Self>, FieldError> {
+        sqlx::query_as!(
+            Self,
+            "SELECT id, uid, name, cook_time, prep_time, total_time, description, directions, ingredients, notes, categories FROM recipe WHERE $1 = any(categories)",
+            category_uid
+        )
+        .fetch_all(&context.pool)
         .await
         .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
@@ -218,6 +234,10 @@ impl Recipe {
 
     async fn meals(&self, context: &Context) -> Result<Vec<Meal>, FieldError> {
         Meal::by_recipe_uid(&context, &self.uid).await
+    }
+
+    async fn categories(&self, context: &Context) -> Result<Vec<Category>, FieldError> {
+        Category::from_uids(&context, &self.categories).await
     }
 }
 
@@ -572,6 +592,97 @@ impl Menu {
     }
 }
 
+struct Bookmark {
+    id: i32,
+    title: String,
+    url: String,
+}
+
+impl Bookmark {
+    async fn all(context: &Context) -> Result<Vec<Self>, FieldError> {
+        sqlx::query_as!(Self, "SELECT id, title, url FROM bookmark")
+            .fetch_all(&context.pool)
+            .await
+            .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
+    }
+}
+
+#[graphql_object(context = Context)]
+impl Bookmark {
+    fn id(&self) -> i32 {
+        self.id
+    }
+
+    fn title(&self) -> &str {
+        &self.title
+    }
+
+    fn url(&self) -> &str {
+        &self.url
+    }
+}
+
+struct Category {
+    id: i32,
+    uid: String,
+    name: String,
+    parent_uid: Option<String>,
+}
+
+impl Category {
+    async fn all(context: &Context) -> Result<Vec<Self>, FieldError> {
+        sqlx::query_as!(Self, r"SELECT id, uid, name, parent_uid FROM category",)
+            .fetch_all(&context.pool)
+            .await
+            .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
+    }
+
+    async fn from_uid(context: &Context, uid: &str) -> Result<Option<Self>, FieldError> {
+        sqlx::query_as!(
+            Self,
+            r"SELECT id, uid, name, parent_uid FROM category WHERE uid = $1",
+            uid
+        )
+        .fetch_optional(&context.pool)
+        .await
+        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
+    }
+
+    async fn from_uids(context: &Context, uids: &[String]) -> Result<Vec<Self>, FieldError> {
+        sqlx::query_as!(
+            Self,
+            r"SELECT id, uid, name, parent_uid FROM category WHERE uid = any($1)",
+            uids
+        )
+        .fetch_all(&context.pool)
+        .await
+        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
+    }
+}
+
+#[graphql_object(context = Context)]
+impl Category {
+    fn id(&self) -> i32 {
+        self.id
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    async fn parent(&self, context: &Context) -> Result<Option<Self>, FieldError> {
+        if let Some(parent_uid) = &self.parent_uid {
+            Category::from_uid(&context, &parent_uid).await
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn recipes(&self, context: &Context) -> Result<Vec<Recipe>, FieldError> {
+        Recipe::in_category(&context, &self.uid).await
+    }
+}
+
 struct Query;
 
 #[graphql_object(context = Context)]
@@ -598,6 +709,14 @@ impl Query {
 
     async fn menus(context: &Context) -> Result<Vec<Menu>, FieldError> {
         Menu::all(&context).await
+    }
+
+    async fn bookmarks(context: &Context) -> Result<Vec<Bookmark>, FieldError> {
+        Bookmark::all(&context).await
+    }
+
+    async fn categories(context: &Context) -> Result<Vec<Category>, FieldError> {
+        Category::all(&context).await
     }
 }
 

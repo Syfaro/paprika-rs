@@ -5,6 +5,7 @@ CREATE TABLE status (
 
 CREATE TABLE recipe (
     id SERIAL PRIMARY KEY,
+    categories TEXT[] NOT NULL,
     cook_time TEXT,
     created TIMESTAMP WITH TIME ZONE NOT NULL,
     description TEXT,
