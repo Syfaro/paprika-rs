@@ -1,5 +1,15 @@
-DROP TABLE status;
-DROP TABLE recipe;
-DROP TABLE meal;
-DROP TABLE grocery_item;
-DROP TABLE aisle;
+DROP TABLE
+    status,
+    recipe,
+    meal,
+    grocery_item,
+    aisle,
+    menu,
+    photo,
+    meal_type,
+    pantry_item,
+    grocery_ingredient,
+    grocery_list,
+    bookmark,
+    menu_item,
+    category;

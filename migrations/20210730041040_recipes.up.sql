@@ -30,3 +30,57 @@ CREATE TABLE aisle (
     name TEXT UNIQUE NOT NULL,
     data JSONB NOT NULL
 );
+
+CREATE TABLE menu (
+    id SERIAL PRIMARY KEY,
+    uid TEXT UNIQUE NOT NULL,
+    data JSONB NOT NULL
+);
+
+CREATE TABLE photo (
+    id SERIAL PRIMARY KEY,
+    uid TEXT UNIQUE NOT NULL,
+    data JSONB NOT NULL
+);
+
+CREATE TABLE meal_type (
+    id SERIAL PRIMARY KEY,
+    uid TEXT UNIQUE NOT NULL,
+    data JSONB NOT NULL
+);
+
+CREATE TABLE pantry_item (
+    id SERIAL PRIMARY KEY,
+    uid TEXT UNIQUE NOT NULL,
+    data JSONB NOT NULL
+);
+
+CREATE TABLE grocery_ingredient (
+    id SERIAL PRIMARY KEY,
+    uid TEXT UNIQUE NOT NULL,
+    data JSONB NOT NULL
+);
+
+CREATE TABLE grocery_list (
+    id SERIAL PRIMARY KEY,
+    uid TEXT UNIQUE NOT NULL,
+    data JSONB NOT NULL
+);
+
+CREATE TABLE bookmark (
+    id SERIAL PRIMARY KEY,
+    uid TEXT UNIQUE NOT NULL,
+    data JSONB NOT NULL
+);
+
+CREATE TABLE menu_item (
+    id SERIAL PRIMARY KEY,
+    uid TEXT UNIQUE NOT NULL,
+    data JSONB NOT NULL
+);
+
+CREATE TABLE category (
+    id SERIAL PRIMARY KEY,
+    uid TEXT UNIQUE NOT NULL,
+    data JSONB NOT NULL
+);
