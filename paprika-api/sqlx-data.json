@@ -1,0 +1,728 @@
+{
+  "db": "PostgreSQL",
+  "0001893c16c0d4c9feb67e190d6d64d022a52ddbb88e1970cdd74d29b4a6c492": {
+    "query": "DELETE FROM meal WHERE uid = $1",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "05ef588244e338a36b8a9c8a3e1c6ba1d9436f2192ca2e43327453aa2418d498": {
+    "query": "SELECT\n                id,\n                uid,\n                data->>'name' \"name!\",\n                data->>'ingredient' \"ingredient!\",\n                data->>'quantity' quantity,\n                data->>'instruction' instruction,\n                (data->'purchased')::boolean \"purchased!\",\n                data->>'aisle_uid' \"aisle_uid!\",\n                data->>'recipe_uid' recipe_uid\n            FROM\n                grocery_item",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "name!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "ingredient!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "quantity",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 5,
+          "name": "instruction",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 6,
+          "name": "purchased!",
+          "type_info": "Bool"
+        },
+        {
+          "ordinal": 7,
+          "name": "aisle_uid!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "recipe_uid",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": [
+        false,
+        false,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    }
+  },
+  "0eb5bc377ed69bb59a17093f38af92f4500d4eba71b94aa2c041231aa6abddf3": {
+    "query": "SELECT id, uid, date, data->>'name' \"name!\", data->>'recipe_uid' recipe_uid FROM meal",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "date",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 3,
+          "name": "name!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "recipe_uid",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        null,
+        null
+      ]
+    }
+  },
+  "25033e985b81540c33a40a361829647858c618326640fc798e18ccf4ccf526fc": {
+    "query": "UPDATE meal SET recipe_uid = $2, date = $3, data = $4 WHERE uid = $1",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text",
+          "Timestamptz",
+          "Jsonb"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "2bf59d985c3a8627962345a527ad25861ecf8962ba66d0e120e61525620416f9": {
+    "query": "SELECT\n                id,\n                uid,\n                data->>'name' \"name!\",\n                (data->'order_flag')::integer \"order_flag!\"\n            FROM\n                aisle\n            WHERE\n                uid = $1",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "name!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "order_flag!",
+          "type_info": "Int4"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        null,
+        null
+      ]
+    }
+  },
+  "3549f225bd8b639bfc0b24ebcff53c35b7a463d24132790311b2bf14c3db144a": {
+    "query": "INSERT INTO recipe (uid, hash, data) VALUES ($1, $2, $3)",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text",
+          "Jsonb"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "3e92ffc256f759f6f1f92177395792b51ba31f606ea516ce5791bf8f13a21e14": {
+    "query": "SELECT data FROM aisle",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "data",
+          "type_info": "Jsonb"
+        }
+      ],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
+  "4051e22712819abe4f89c6e395d1b00308ab3f1720c6771d78f3b1e0182464d5": {
+    "query": "SELECT\n                id,\n                uid,\n                data->>'name' \"name!\",\n                data->>'cook_time' \"cook_time\",\n                data->>'prep_time' \"prep_time\",\n                data->>'total_time' \"total_time\",\n                data->>'description' \"description\",\n                data->>'directions' \"directions!\",\n                data->>'ingredients' \"ingredients!\",\n                data->>'notes' \"notes!\"\n            FROM\n                recipe\n            WHERE\n                id = $1",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "name!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "cook_time",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "prep_time",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 5,
+          "name": "total_time",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 6,
+          "name": "description",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "directions!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "ingredients!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 9,
+          "name": "notes!",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    }
+  },
+  "4be7dd7dba96d8e3421ece2de57b4422f929ed7387b2d171d343d4f522d7d624": {
+    "query": "UPDATE aisle SET name = $2, data = $3 WHERE uid = $1",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text",
+          "Jsonb"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "610dd4e06dde17a48c5925c456f3d7fc50909418125d584791dbf5f38f5091fd": {
+    "query": "INSERT INTO aisle (uid, name, data) VALUES ($1, $2, $3)",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text",
+          "Jsonb"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "666d4ae328e3ff78bc309dde3470f5c677dcb829176442f6221146900b92e470": {
+    "query": "SELECT id, uid, date, data->>'name' \"name!\", data->>'recipe_uid' recipe_uid FROM meal WHERE id = $1",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "date",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 3,
+          "name": "name!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "recipe_uid",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        null,
+        null
+      ]
+    }
+  },
+  "7380e175209705f532ea11264499d205677dd287590c498028cdb9cb4423032f": {
+    "query": "INSERT INTO meal (uid, recipe_uid, date, data) VALUES ($1, $2, $3, $4)",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text",
+          "Timestamptz",
+          "Jsonb"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "77078e3121612b443160e43ff3424a11ddcdae570652746b618842b8ec03b16a": {
+    "query": "UPDATE recipe SET hash = $2, data = $3 WHERE uid = $1",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text",
+          "Jsonb"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "7c262e05f64711ccc7296666d5af5e00e609f9dc132671335108c0cc995ffee0": {
+    "query": "SELECT position FROM status WHERE name = $1",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "position",
+          "type_info": "Int4"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
+  "7cb31c63708978b3c6862840cd57ef9d22045643d5080b06fa3d160125e241ae": {
+    "query": "DELETE FROM recipe WHERE uid = $1",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "8190507afdd45988042c11bc7eff5b8d4da545d008280aaa2a7d7ff75f7e2fc1": {
+    "query": "UPDATE grocery_item SET data = $2 WHERE uid = $1",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Jsonb"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "983d528b64d4188d7c2902d60c2d732650bf11264244e9377024679b5b6b0e6e": {
+    "query": "SELECT\n                id,\n                uid,\n                data->>'name' \"name!\",\n                data->>'cook_time' \"cook_time\",\n                data->>'prep_time' \"prep_time\",\n                data->>'total_time' \"total_time\",\n                data->>'description' \"description\",\n                data->>'directions' \"directions!\",\n                data->>'ingredients' \"ingredients!\",\n                data->>'notes' \"notes!\"\n            FROM\n                recipe",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "name!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "cook_time",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "prep_time",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 5,
+          "name": "total_time",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 6,
+          "name": "description",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "directions!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "ingredients!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 9,
+          "name": "notes!",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": [
+        false,
+        false,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    }
+  },
+  "a5abf1e177f4ba3598abf03d60e69a7bef6bd7b986feeb1a90e6fd25e248181e": {
+    "query": "SELECT id, uid, date, data->>'name' \"name!\", data->>'recipe_uid' recipe_uid FROM meal WHERE recipe_uid = $1",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "date",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 3,
+          "name": "name!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "recipe_uid",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        null,
+        null
+      ]
+    }
+  },
+  "a94720243439cc65d9334cb9a2811b166277629d35295e5d74a418f1787d85ec": {
+    "query": "SELECT\n                id,\n                uid,\n                data->>'name' \"name!\",\n                data->>'cook_time' \"cook_time\",\n                data->>'prep_time' \"prep_time\",\n                data->>'total_time' \"total_time\",\n                data->>'description' \"description\",\n                data->>'directions' \"directions!\",\n                data->>'ingredients' \"ingredients!\",\n                data->>'notes' \"notes!\"\n            FROM\n                recipe\n            WHERE\n                uid = $1",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "name!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "cook_time",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "prep_time",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 5,
+          "name": "total_time",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 6,
+          "name": "description",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "directions!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "ingredients!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 9,
+          "name": "notes!",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    }
+  },
+  "aad6f4246faec5e136c01e6eb3ee2c3a762a6a9a0c3a23c56dd3abdff502a653": {
+    "query": "INSERT INTO grocery_item (uid, data) VALUES ($1, $2)",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Jsonb"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "ba4bf418d488292ee3fd276c64b25997e68e2da822ccf46be8d90149682e0fdb": {
+    "query": "DELETE FROM grocery_item WHERE uid = $1",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "bbbbe4da646f9206266f6ba094de70f915dd1c455b32ca398835e4362ac77e2b": {
+    "query": "DELETE FROM aisle WHERE uid = $1",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "d4ad0188994775afb36d9a6ec64e6bebd3f82efb398e6d913314e1f1918eff6c": {
+    "query": "SELECT uid, hash FROM recipe",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 1,
+          "name": "hash",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": [
+        false,
+        false
+      ]
+    }
+  },
+  "d50e597749433dbb7aea00eafe4391636a711fd5deba0b93c892d0dd036f911d": {
+    "query": "SELECT data FROM meal",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "data",
+          "type_info": "Jsonb"
+        }
+      ],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
+  "df79d7ac02baa60da4e08ebcc4ff7836f2a702be2508dd09a48e0c440ebd51a7": {
+    "query": "INSERT INTO status (name, position) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET position = EXCLUDED.position",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Int4"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "e1790aa4466037eb86800d8ae92faaff907f20d6dc9830fbe240afde3b027d90": {
+    "query": "SELECT data FROM grocery_item",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "data",
+          "type_info": "Jsonb"
+        }
+      ],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": [
+        false
+      ]
+    }
+  }
+}

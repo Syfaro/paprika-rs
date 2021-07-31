@@ -10,7 +10,13 @@ tracing-subscriber = "0.2"
 anyhow = "1"
 async-trait = "0.1"
 tokio = "1"
-sqlx = { version = "0.5", features = ["runtime-tokio-rustls", "postgres", "macros", "migrate", "chrono", "json"] }
+sqlx = { version = "0.5", features = ["runtime-tokio-rustls", "postgres", "macros", "migrate", "chrono", "json", "offline"] }
 serde_json = "1"
+
+actix-web = "4.0.0-beta.8"
+actix-cors = "0.6.0-beta.2"
+juniper = "0.15"
+juniper_actix = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
 
 paprika-client = { path = "../paprika-client" }

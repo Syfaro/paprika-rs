@@ -143,6 +143,30 @@ pub struct PaprikaMeal {
     pub type_uid: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PaprikaGroceryItem {
+    pub uid: String,
+    pub recipe_uid: Option<String>,
+    pub name: String,
+    pub order_flag: i32,
+    pub purchased: bool,
+    pub aisle: String,
+    pub ingredient: String,
+    pub recipe: Option<String>,
+    pub instruction: String,
+    pub quantity: String,
+    pub separate: bool,
+    pub aisle_uid: String,
+    pub list_uid: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PaprikaAisle {
+    pub uid: String,
+    pub name: String,
+    pub order_flag: i32,
+}
+
 pub trait PaprikaId {
     fn paprika_id(&self) -> String;
 }
@@ -165,6 +189,18 @@ impl PaprikaId for PaprikaMeal {
     }
 }
 
+impl PaprikaId for PaprikaGroceryItem {
+    fn paprika_id(&self) -> String {
+        self.uid.to_owned()
+    }
+}
+
+impl PaprikaId for PaprikaAisle {
+    fn paprika_id(&self) -> String {
+        self.uid.to_owned()
+    }
+}
+
 pub trait PaprikaCompare {
     fn paprika_compare(&self, rhs: &Self) -> bool;
 }
@@ -182,6 +218,18 @@ impl PaprikaCompare for PaprikaRecipe {
 }
 
 impl PaprikaCompare for PaprikaMeal {
+    fn paprika_compare(&self, rhs: &Self) -> bool {
+        self == rhs
+    }
+}
+
+impl PaprikaCompare for PaprikaGroceryItem {
+    fn paprika_compare(&self, rhs: &Self) -> bool {
+        self == rhs
+    }
+}
+
+impl PaprikaCompare for PaprikaAisle {
     fn paprika_compare(&self, rhs: &Self) -> bool {
         self == rhs
     }
@@ -257,7 +305,7 @@ impl PaprikaClient {
         Ok(status)
     }
 
-    pub async fn recipe_list(&self) -> Result<Vec<PaprikaRecipeHash>, Error> {
+    pub async fn recipes(&self) -> Result<Vec<PaprikaRecipeHash>, Error> {
         let req = self
             .client
             .get(format!("{}/sync/recipes/", API_ENDPOINT))
@@ -285,7 +333,7 @@ impl PaprikaClient {
         Ok(recipe)
     }
 
-    pub async fn meal_list(&self) -> Result<Vec<PaprikaMeal>, Error> {
+    pub async fn meals(&self) -> Result<Vec<PaprikaMeal>, Error> {
         let req = self
             .client
             .get(format!("{}/sync/meals/", API_ENDPOINT))
@@ -297,65 +345,115 @@ impl PaprikaClient {
 
         Ok(meals)
     }
+
+    pub async fn groceries(&self) -> Result<Vec<PaprikaGroceryItem>, Error> {
+        let req = self
+            .client
+            .get(format!("{}/sync/groceries/", API_ENDPOINT))
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let PaprikaResult { result: meals } = req.json().await?;
+
+        Ok(meals)
+    }
+
+    pub async fn aisles(&self) -> Result<Vec<PaprikaAisle>, Error> {
+        let req = self
+            .client
+            .get(format!("{}/sync/groceryaisles/", API_ENDPOINT))
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let PaprikaResult { result: aisles } = req.json().await?;
+
+        Ok(aisles)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn get_token() -> String {
-        std::env::var("PAPRIKA_TOKEN").expect("tests require PAPRIKA_TOKEN")
+    #[ignore]
+    #[tokio::test]
+    async fn test_login() {
+        let email = std::env::var("PAPRIKA_EMAIL").expect("missing PAPRIKA_EMAIL");
+        let password = std::env::var("PAPRIKA_PASSWORD").expect("missing PAPRIKA_PASSWORD");
+
+        let paprika = PaprikaClient::login(email, password)
+            .await
+            .expect("unable to login");
+        println!("token: {}", paprika.token);
+    }
+
+    async fn get_paprika() -> PaprikaClient {
+        let token = std::env::var("PAPRIKA_TOKEN").expect("tests require PAPRIKA_TOKEN");
+        PaprikaClient::token(token)
+            .await
+            .expect("should be able to use token for authentication")
     }
 
     #[tokio::test]
     async fn test_token() {
-        let _paprika = PaprikaClient::token(&get_token())
-            .await
-            .expect("should be able to use token for authentication");
+        let _paprika = get_paprika().await;
         println!("authenciated with token");
     }
 
     #[tokio::test]
     async fn test_status() {
-        let paprika = PaprikaClient::token(&get_token())
-            .await
-            .expect("should be able to use token for authentication");
+        let paprika = get_paprika().await;
         let status = paprika
             .status()
             .await
             .expect("should be able to get status");
-        println!("status: {:?}", status);
+        println!("status: {:#?}", status);
     }
 
     #[tokio::test]
     async fn test_recipes() {
-        let paprika = PaprikaClient::token(&get_token())
+        let paprika = get_paprika().await;
+        let recipes = paprika
+            .recipes()
             .await
-            .expect("should be able to use token for authentication");
-        let recipe_list = paprika
-            .recipe_list()
-            .await
-            .expect("should be able to get recipe list");
-        println!("recipe list: {:?}", recipe_list);
+            .expect("should be able to get recipes");
+        println!("recipes: {:#?}", recipes);
 
-        for recipe_hash in recipe_list {
+        for recipe_hash in recipes {
             let recipe = paprika
                 .recipe(&recipe_hash.uid)
                 .await
                 .expect("recipe should exist");
-            println!("recipe: {:?}", recipe);
+            println!("recipe: {:#?}", recipe);
         }
     }
 
     #[tokio::test]
-    async fn test_meal_list() {
-        let paprika = PaprikaClient::token(&get_token())
+    async fn test_meals() {
+        let paprika = get_paprika().await;
+        let meals = paprika.meals().await.expect("should be able to get meals");
+        println!("meals: {:#?}", meals);
+    }
+
+    #[tokio::test]
+    async fn test_groceries() {
+        let paprika = get_paprika().await;
+        let groceries = paprika
+            .groceries()
             .await
-            .expect("should be able to use token for authentication");
-        let meal_list = paprika
-            .meal_list()
+            .expect("should be able to get groceries");
+        println!("groceries: {:#?}", groceries);
+    }
+
+    #[tokio::test]
+    async fn test_aisles() {
+        let paprika = get_paprika().await;
+        let aisles = paprika
+            .aisles()
             .await
-            .expect("should be able to get meal list");
-        println!("meal list: {:#?}", meal_list);
+            .expect("should be able to get aisles");
+        println!("aisles: {:#?}", aisles);
     }
 }

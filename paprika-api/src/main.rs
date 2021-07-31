@@ -1,19 +1,17 @@
-use std::{
-    collections::{HashMap, HashSet},
-    convert::TryInto,
+use std::sync::Arc;
+
+use actix_cors::Cors;
+use actix_web::{http::header, web, App, Error, HttpRequest, HttpResponse, HttpServer};
+use juniper::{
+    graphql_object, graphql_value, EmptyMutation, EmptySubscription, FieldError, GraphQLObject,
+    RootNode,
 };
+use juniper_actix::{graphiql_handler, graphql_handler, playground_handler};
+use paprika_client::PaprikaClient;
 
-use paprika_client::{PaprikaClient, PaprikaCompare, PaprikaId, PaprikaMeal, PaprikaRecipeHash};
+mod updates;
 
-#[derive(Debug)]
-enum State {
-    Added,
-    Deleted,
-    Changed,
-    Equal,
-}
-
-#[tokio::main]
+#[actix_web::main]
 async fn main() {
     tracing_subscriber::fmt::init();
 
@@ -35,301 +33,390 @@ async fn main() {
         .await
         .expect("could not run database migrations");
 
-    check_for_updates(&paprika, &pool).await.unwrap();
-
+    updates::check_for_updates(&paprika, &pool).await.unwrap();
     tracing::info!("completed database update");
+
+    let paprika = Arc::new(paprika);
+
+    HttpServer::new(move || {
+        App::new()
+            .app_data(web::Data::new(Context {
+                pool: pool.clone(),
+                paprika: paprika.clone(),
+            }))
+            .app_data(web::Data::new(Schema::new(
+                Query,
+                Default::default(),
+                Default::default(),
+            )))
+            .wrap(
+                Cors::default()
+                    .allow_any_origin()
+                    .allowed_methods(vec!["POST", "GET"])
+                    .allowed_header(header::CONTENT_TYPE)
+                    .max_age(3600),
+            )
+            .service(
+                web::resource("/graphql")
+                    .route(web::post().to(graphql_route))
+                    .route(web::get().to(graphql_route)),
+            )
+            .service(web::resource("/playground").route(web::get().to(playground_route)))
+            .service(web::resource("/graphiql").route(web::get().to(graphiql_route)))
+    })
+    .bind("0.0.0.0:8080")
+    .unwrap()
+    .run()
+    .await
+    .unwrap();
 }
 
-async fn check_for_updates(
-    paprika: &PaprikaClient,
-    pool: &sqlx::Pool<sqlx::Postgres>,
-) -> anyhow::Result<()> {
-    let status: std::collections::HashMap<String, i32> = paprika.status().await?.try_into()?;
-
-    for (status, position) in status {
-        let database_position =
-            sqlx::query_scalar!("SELECT position FROM status WHERE name = $1", status)
-                .fetch_optional(pool)
-                .await?;
-
-        let needs_update = match database_position {
-            Some(database_position) => {
-                if position != database_position {
-                    tracing::info!(
-                        "database out of date, cloud position is {} but database has {}",
-                        position,
-                        database_position
-                    );
-
-                    sqlx::query!(
-                        "UPDATE status SET position = $2 WHERE name = $1",
-                        status,
-                        position
-                    )
-                    .execute(pool)
-                    .await?;
-
-                    true
-                } else {
-                    tracing::info!("section {} was already up to date", status);
-
-                    false
-                }
-            }
-            None => {
-                sqlx::query!(
-                    "INSERT INTO status (name, position) VALUES ($1, $2)",
-                    status,
-                    position
-                )
-                .execute(pool)
-                .await?;
-
-                true
-            }
-        };
-
-        if needs_update {
-            match status.as_str() {
-                "recipes" => update_collection::<PaprikaRecipeHash>(&paprika, &pool).await?,
-                "meals" => update_collection::<PaprikaMeal>(&paprika, &pool).await?,
-                _ => tracing::warn!("other section {} needs update", status),
-            }
-        }
-    }
-
-    Ok(())
+#[derive(Clone)]
+struct Context {
+    pool: sqlx::Pool<sqlx::Postgres>,
+    paprika: Arc<PaprikaClient>,
 }
 
-#[async_trait::async_trait]
-trait UpdateItem: Sized {
-    async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>>;
-    async fn current_items(paprika: &PaprikaClient) -> anyhow::Result<Vec<Self>>;
+impl juniper::Context for Context {}
 
-    async fn on_add(
-        paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
-        new_item: &Self,
-    ) -> anyhow::Result<()>;
+struct Recipe {
+    id: i32,
+    uid: String,
 
-    async fn on_change(
-        paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
-        new_item: &Self,
-    ) -> anyhow::Result<()>;
+    name: String,
 
-    async fn on_delete(
-        paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
-        old_item: &Self,
-    ) -> anyhow::Result<()>;
+    cook_time: Option<String>,
+    prep_time: Option<String>,
+    total_time: Option<String>,
+
+    description: Option<String>,
+    directions: String,
+    ingredients: String,
+    notes: String,
 }
 
-#[async_trait::async_trait]
-impl UpdateItem for PaprikaRecipeHash {
-    async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
-        let recipes = sqlx::query!("SELECT uid, hash FROM recipe")
-            .map(|row| PaprikaRecipeHash {
-                uid: row.uid,
-                hash: row.hash,
-            })
-            .fetch_all(pool)
-            .await?
-            .into_iter()
-            .collect();
+impl Recipe {
+    async fn all(context: &Context) -> Result<Vec<Recipe>, FieldError> {
+        let recipes = sqlx::query_as!(
+            Recipe,
+            r#"SELECT
+                id,
+                uid,
+                data->>'name' "name!",
+                data->>'cook_time' "cook_time",
+                data->>'prep_time' "prep_time",
+                data->>'total_time' "total_time",
+                data->>'description' "description",
+                data->>'directions' "directions!",
+                data->>'ingredients' "ingredients!",
+                data->>'notes' "notes!"
+            FROM
+                recipe"#
+        )
+        .fetch_all(&context.pool)
+        .await
+        .map_err(|err| {
+            tracing::error!("recipe fetch error: {:?}", err);
+            FieldError::new("could not query database", graphql_value!(None))
+        })?;
 
         Ok(recipes)
     }
 
-    async fn current_items(paprika: &PaprikaClient) -> anyhow::Result<Vec<Self>> {
-        let items = paprika.recipe_list().await?;
-        Ok(items)
-    }
-
-    async fn on_add(
-        paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
-        new_item: &Self,
-    ) -> anyhow::Result<()> {
-        let recipe = paprika.recipe(&new_item.uid).await?;
-
-        sqlx::query!(
-            "INSERT INTO recipe (uid, hash, data) VALUES ($1, $2, $3)",
-            recipe.uid,
-            recipe.hash,
-            serde_json::to_value(&recipe).expect("recipe should be serializable")
+    async fn from_id(context: &Context, id: i32) -> Result<Option<Recipe>, FieldError> {
+        sqlx::query_as!(
+            Recipe,
+            r#"SELECT
+                id,
+                uid,
+                data->>'name' "name!",
+                data->>'cook_time' "cook_time",
+                data->>'prep_time' "prep_time",
+                data->>'total_time' "total_time",
+                data->>'description' "description",
+                data->>'directions' "directions!",
+                data->>'ingredients' "ingredients!",
+                data->>'notes' "notes!"
+            FROM
+                recipe
+            WHERE
+                id = $1"#,
+            id
         )
-        .execute(pool)
-        .await?;
-
-        Ok(())
+        .fetch_optional(&context.pool)
+        .await
+        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
 
-    async fn on_change(
-        paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
-        new_item: &Self,
-    ) -> anyhow::Result<()> {
-        let recipe = paprika.recipe(&new_item.uid).await?;
-
-        sqlx::query!(
-            "UPDATE recipe SET hash = $2, data = $3 WHERE uid = $1",
-            recipe.uid,
-            recipe.hash,
-            serde_json::to_value(&recipe).expect("recipe should be serializable")
+    async fn from_uid(context: &Context, uid: &str) -> Result<Option<Recipe>, FieldError> {
+        sqlx::query_as!(
+            Recipe,
+            r#"SELECT
+                id,
+                uid,
+                data->>'name' "name!",
+                data->>'cook_time' "cook_time",
+                data->>'prep_time' "prep_time",
+                data->>'total_time' "total_time",
+                data->>'description' "description",
+                data->>'directions' "directions!",
+                data->>'ingredients' "ingredients!",
+                data->>'notes' "notes!"
+            FROM
+                recipe
+            WHERE
+                uid = $1"#,
+            uid
         )
-        .execute(pool)
-        .await?;
-
-        Ok(())
-    }
-
-    async fn on_delete(
-        _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
-        old_item: &Self,
-    ) -> anyhow::Result<()> {
-        sqlx::query!("DELETE FROM recipe WHERE uid = $1", old_item.uid)
-            .execute(pool)
-            .await?;
-
-        Ok(())
+        .fetch_optional(&context.pool)
+        .await
+        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
 }
 
-#[async_trait::async_trait]
-impl UpdateItem for PaprikaMeal {
-    async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
-        let meals = sqlx::query!("SELECT data FROM meal")
-            .map(|row| serde_json::from_value(row.data).unwrap())
-            .fetch_all(pool)
-            .await?
-            .into_iter()
-            .collect();
-        Ok(meals)
+#[graphql_object(context = Context)]
+impl Recipe {
+    fn id(&self) -> i32 {
+        self.id
     }
 
-    async fn current_items(paprika: &PaprikaClient) -> anyhow::Result<Vec<Self>> {
-        let meals = paprika.meal_list().await?;
-        Ok(meals)
+    fn name(&self) -> &str {
+        &self.name
     }
 
-    async fn on_add(
-        _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
-        new_item: &Self,
-    ) -> anyhow::Result<()> {
-        sqlx::query!(
-            "INSERT INTO meal (uid, recipe_uid, date, data) VALUES ($1, $2, $3, $4)",
-            new_item.uid,
-            new_item.recipe_uid,
-            new_item.date,
-            serde_json::to_value(&new_item).expect("meal should be serializable")
-        )
-        .execute(pool)
-        .await?;
-        Ok(())
+    fn cook_time(&self) -> Option<&str> {
+        self.cook_time.as_deref().filter(|s| !s.trim().is_empty())
     }
 
-    async fn on_change(
-        _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
-        new_item: &Self,
-    ) -> anyhow::Result<()> {
-        sqlx::query!(
-            "UPDATE meal SET recipe_uid = $2, date = $3, data = $4 WHERE uid = $1",
-            new_item.uid,
-            new_item.recipe_uid,
-            new_item.date,
-            serde_json::to_value(&new_item).expect("meal should be serializable")
-        )
-        .execute(pool)
-        .await?;
-        Ok(())
+    fn prep_time(&self) -> Option<&str> {
+        self.prep_time.as_deref().filter(|s| !s.trim().is_empty())
     }
 
-    async fn on_delete(
-        _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
-        old_item: &Self,
-    ) -> anyhow::Result<()> {
-        sqlx::query!("DELETE FROM meal WHERE uid = $1", old_item.uid)
-            .execute(pool)
-            .await?;
-        Ok(())
+    fn total_time(&self) -> Option<&str> {
+        self.total_time.as_deref().filter(|s| !s.trim().is_empty())
     }
-}
 
-async fn update_collection<C>(
-    paprika: &PaprikaClient,
-    pool: &sqlx::Pool<sqlx::Postgres>,
-) -> anyhow::Result<()>
-where
-    C: PaprikaId + PaprikaCompare + UpdateItem,
-{
-    tracing::debug!("updating collection");
+    fn description(&self) -> Option<&str> {
+        self.description.as_deref().filter(|s| !s.trim().is_empty())
+    }
 
-    let existing_items: HashMap<String, C> = C::existing_items(pool)
-        .await?
-        .into_iter()
-        .map(|item| (item.paprika_id(), item))
-        .collect();
-    tracing::debug!("found {} existing items", existing_items.len());
+    fn directions(&self) -> &str {
+        &self.directions
+    }
 
-    let current_items: HashMap<String, C> = C::current_items(paprika)
-        .await?
-        .into_iter()
-        .map(|item| (item.paprika_id(), item))
-        .collect();
-    tracing::debug!("found {} current items", current_items.len());
+    fn ingredients(&self) -> &str {
+        &self.ingredients
+    }
 
-    let known_items: HashSet<&String> = existing_items
-        .iter()
-        .chain(current_items.iter())
-        .map(|item| item.0)
-        .collect();
-    tracing::debug!("found {} unique items", known_items.len());
-
-    let item_states: Vec<_> = known_items
-        .iter()
-        .map(|item| {
-            let state = match (existing_items.get(*item), current_items.get(*item)) {
-                (Some(existing), Some(current)) => {
-                    if existing.paprika_compare(current) {
-                        State::Equal
-                    } else {
-                        State::Changed
-                    }
-                }
-                (Some(_existing), None) => State::Deleted,
-                (None, Some(_current)) => State::Added,
-                _ => unreachable!("item must have appeared in some state"),
-            };
-
-            (item, state)
-        })
-        .collect();
-
-    for (id, state) in item_states {
-        match state {
-            State::Added => {
-                tracing::info!("item {} was added", id);
-                let item = current_items.get(*id).unwrap();
-                C::on_add(paprika, pool, item).await?;
-            }
-            State::Changed => {
-                tracing::info!("item {} was changed", id);
-                let item = current_items.get(*id).unwrap();
-                C::on_change(paprika, pool, item).await?;
-            }
-            State::Deleted => {
-                tracing::info!("item {} was deleted", id);
-                let item = existing_items.get(*id).unwrap();
-                C::on_delete(paprika, pool, item).await?;
-            }
-            _ => tracing::info!("item {} was unchanged", id),
+    fn notes(&self) -> Option<&str> {
+        if self.notes.trim().is_empty() {
+            None
+        } else {
+            Some(self.notes.as_str())
         }
     }
 
-    Ok(())
+    async fn meals(&self, context: &Context) -> Result<Vec<Meal>, FieldError> {
+        let meals = sqlx::query_as!(
+            Meal,
+            r#"SELECT id, date, data->>'name' "name!", data->>'recipe_uid' recipe_uid FROM meal WHERE recipe_uid = $1"#, self.uid
+        )
+        .fetch_all(&context.pool)
+        .await
+        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))?;
+
+        Ok(meals)
+    }
+}
+
+struct Meal {
+    id: i32,
+    name: String,
+    date: chrono::DateTime<chrono::Utc>,
+
+    recipe_uid: Option<String>,
+}
+
+#[graphql_object(context = Context)]
+impl Meal {
+    fn id(&self) -> i32 {
+        self.id
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn date(&self) -> chrono::DateTime<chrono::Utc> {
+        self.date
+    }
+
+    async fn recipe(&self, context: &Context) -> Result<Option<Recipe>, FieldError> {
+        let recipe_uid = match &self.recipe_uid {
+            Some(recipe_uid) => recipe_uid,
+            None => return Ok(None),
+        };
+
+        Recipe::from_uid(&context, &recipe_uid).await
+    }
+}
+
+struct GroceryItem {
+    id: i32,
+
+    name: String,
+    ingredient: String,
+    quantity: Option<String>,
+    instruction: Option<String>,
+
+    purchased: bool,
+    aisle_uid: String,
+
+    recipe_uid: Option<String>,
+}
+
+#[graphql_object(context = Context)]
+impl GroceryItem {
+    fn id(&self) -> i32 {
+        self.id
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn ingredient(&self) -> &str {
+        &self.ingredient
+    }
+
+    fn quantity(&self) -> Option<&str> {
+        self.quantity.as_deref()
+    }
+
+    fn instruction(&self) -> Option<&str> {
+        self.instruction.as_deref()
+    }
+
+    fn purchased(&self) -> bool {
+        self.purchased
+    }
+
+    async fn recipe(&self, context: &Context) -> Result<Option<Recipe>, FieldError> {
+        let recipe_uid = match &self.recipe_uid {
+            Some(recipe_uid) => recipe_uid,
+            None => return Ok(None),
+        };
+
+        Recipe::from_uid(&context, &recipe_uid).await
+    }
+
+    async fn aisle(&self, context: &Context) -> Result<Aisle, FieldError> {
+        let aisle = Aisle::from_uid(&context, &self.aisle_uid).await?;
+        aisle.ok_or_else(|| FieldError::new("item should always have aisle", graphql_value!(None)))
+    }
+}
+
+#[derive(GraphQLObject)]
+struct Aisle {
+    id: i32,
+    name: String,
+    order_flag: i32,
+}
+
+impl Aisle {
+    async fn from_uid(context: &Context, uid: &str) -> Result<Option<Aisle>, FieldError> {
+        sqlx::query_as!(
+            Aisle,
+            r#"SELECT
+                id,
+                data->>'name' "name!",
+                (data->'order_flag')::integer "order_flag!"
+            FROM
+                aisle
+            WHERE
+                uid = $1"#,
+            uid
+        )
+        .fetch_optional(&context.pool)
+        .await
+        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
+    }
+}
+
+struct Query;
+
+#[graphql_object(context = Context)]
+impl Query {
+    async fn recipe(context: &Context, id: i32) -> Result<Option<Recipe>, FieldError> {
+        Recipe::from_id(&context, id).await
+    }
+
+    async fn recipes(context: &Context) -> Result<Vec<Recipe>, FieldError> {
+        Recipe::all(&context).await
+    }
+
+    async fn meal(context: &Context, id: i32) -> Result<Option<Meal>, FieldError> {
+        let meal = sqlx::query_as!(
+            Meal,
+            r#"SELECT id, date, data->>'name' "name!", data->>'recipe_uid' recipe_uid FROM meal WHERE id = $1"#, id
+        )
+        .fetch_optional(&context.pool)
+        .await
+        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))?;
+
+        Ok(meal)
+    }
+
+    async fn meals(context: &Context) -> Result<Vec<Meal>, FieldError> {
+        let meals = sqlx::query_as!(
+            Meal,
+            r#"SELECT id, date, data->>'name' "name!", data->>'recipe_uid' recipe_uid FROM meal"#
+        )
+        .fetch_all(&context.pool)
+        .await
+        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))?;
+
+        Ok(meals)
+    }
+
+    async fn groceries(context: &Context) -> Result<Vec<GroceryItem>, FieldError> {
+        let groceries = sqlx::query_as!(
+            GroceryItem,
+            r#"SELECT
+                id,
+                data->>'name' "name!",
+                data->>'ingredient' "ingredient!",
+                data->>'quantity' quantity,
+                data->>'instruction' instruction,
+                (data->'purchased')::boolean "purchased!",
+                data->>'aisle_uid' "aisle_uid!",
+                data->>'recipe_uid' recipe_uid
+            FROM
+                grocery_item"#
+        )
+        .fetch_all(&context.pool)
+        .await
+        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))?;
+
+        Ok(groceries)
+    }
+}
+
+type Schema = RootNode<'static, Query, EmptyMutation<Context>, EmptySubscription<Context>>;
+
+async fn graphiql_route() -> Result<HttpResponse, Error> {
+    graphiql_handler("/graphql", None).await
+}
+
+async fn playground_route() -> Result<HttpResponse, Error> {
+    playground_handler("/graphql", None).await
+}
+
+async fn graphql_route(
+    req: HttpRequest,
+    payload: web::Payload,
+    schema: web::Data<Schema>,
+    context: web::Data<Context>,
+) -> Result<HttpResponse, Error> {
+    graphql_handler(&schema, &context, req, payload).await
 }

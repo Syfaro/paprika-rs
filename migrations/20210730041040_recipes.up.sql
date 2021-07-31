@@ -17,3 +17,16 @@ CREATE TABLE meal (
     date TIMESTAMP WITH TIME ZONE NOT NULL,
     data JSONB NOT NULL
 );
+
+CREATE TABLE grocery_item (
+    id SERIAL PRIMARY KEY,
+    uid TEXT UNIQUE NOT NULL,
+    data JSONB NOT NULL
+);
+
+CREATE TABLE aisle (
+    id SERIAL PRIMARY KEY,
+    uid TEXT UNIQUE NOT NULL,
+    name TEXT UNIQUE NOT NULL,
+    data JSONB NOT NULL
+);
