@@ -4,12 +4,11 @@ use std::{
 };
 
 use paprika_client::{
-    PaprikaAisle, PaprikaClient, PaprikaCompare, PaprikaGroceryItem, PaprikaId, PaprikaMeal,
-    PaprikaRecipeHash,
+    PaprikaAisle, PaprikaClient, PaprikaGroceryItem, PaprikaId, PaprikaMeal, PaprikaRecipeHash,
 };
 
-#[derive(Debug)]
-enum State {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum State {
     Added,
     Deleted,
     Changed,
@@ -20,8 +19,10 @@ enum State {
 pub async fn check_for_updates(
     paprika: &PaprikaClient,
     pool: &sqlx::Pool<sqlx::Postgres>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<HashMap<State, usize>> {
     let status: HashMap<String, i32> = paprika.status().await?.try_into()?;
+
+    let mut changes = HashMap::with_capacity(4);
 
     for (name, position) in status {
         let database_position =
@@ -34,28 +35,34 @@ pub async fn check_for_updates(
 
         let was_updated = if !matches_latest {
             tracing::info!("section {} needs update", name);
-            match name.as_str() {
-                "recipes" => {
-                    update_collection::<PaprikaRecipeHash>(&paprika, &pool).await?;
-                    true
-                }
-                "meals" => {
-                    update_collection::<PaprikaMeal>(&paprika, &pool).await?;
-                    true
-                }
-                "groceries" => {
-                    update_collection::<PaprikaGroceryItem>(&paprika, &pool).await?;
-                    true
-                }
-                "groceryaisles" => {
-                    update_collection::<PaprikaAisle>(&paprika, &pool).await?;
-                    true
-                }
+            let (item_changes, was_updated) = match name.as_str() {
+                "recipes" => (
+                    update_collection::<PaprikaRecipeHash>(&paprika, &pool).await?,
+                    true,
+                ),
+                "meals" => (
+                    update_collection::<PaprikaMeal>(&paprika, &pool).await?,
+                    true,
+                ),
+                "groceries" => (
+                    update_collection::<PaprikaGroceryItem>(&paprika, &pool).await?,
+                    true,
+                ),
+                "groceryaisles" => (
+                    update_collection::<PaprikaAisle>(&paprika, &pool).await?,
+                    true,
+                ),
                 _ => {
                     tracing::warn!("other section {} needs update", name);
-                    false
+                    (Default::default(), false)
                 }
+            };
+
+            for (state, count) in item_changes {
+                *changes.entry(state).or_default() += count;
             }
+
+            was_updated
         } else {
             tracing::info!("section {} is up to date", name);
             false
@@ -67,7 +74,9 @@ pub async fn check_for_updates(
         }
     }
 
-    Ok(())
+    tracing::debug!("observed changes: {:?}", changes);
+
+    Ok(changes)
 }
 
 #[async_trait::async_trait]
@@ -98,9 +107,9 @@ trait UpdateItem: Sized {
 async fn update_collection<C>(
     paprika: &PaprikaClient,
     pool: &sqlx::Pool<sqlx::Postgres>,
-) -> anyhow::Result<()>
+) -> anyhow::Result<HashMap<State, usize>>
 where
-    C: PaprikaId + PaprikaCompare + UpdateItem,
+    C: PaprikaId + Eq + UpdateItem,
 {
     tracing::debug!("updating collection");
 
@@ -130,7 +139,7 @@ where
         .map(|item| {
             let state = match (existing_items.get(*item), current_items.get(*item)) {
                 (Some(existing), Some(current)) => {
-                    if existing.paprika_compare(current) {
+                    if existing.eq(current) {
                         State::Equal
                     } else {
                         State::Changed
@@ -144,6 +153,8 @@ where
             (item, state)
         })
         .collect();
+
+    let mut changes: HashMap<State, usize> = HashMap::with_capacity(4);
 
     for (id, state) in item_states {
         match state {
@@ -164,9 +175,11 @@ where
             }
             _ => tracing::info!("item {} was unchanged", id),
         }
+
+        *changes.entry(state).or_default() += 1;
     }
 
-    Ok(())
+    Ok(changes)
 }
 
 #[async_trait::async_trait]

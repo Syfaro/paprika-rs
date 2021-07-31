@@ -31,7 +31,7 @@ mod paprika_date_format {
     where
         S: Serializer,
     {
-        let s = format!("{}", date.format(FORMAT));
+        let s = date.format(FORMAT).to_string();
         serializer.serialize_str(&s)
     }
 
@@ -42,6 +42,38 @@ mod paprika_date_format {
         let s = String::deserialize(deserializer)?;
         Utc.datetime_from_str(&s, FORMAT)
             .map_err(serde::de::Error::custom)
+    }
+}
+
+mod paprika_optional_date_format {
+    use chrono::{DateTime, TimeZone, Utc};
+    use serde::{self, Deserialize, Deserializer, Serializer};
+
+    const FORMAT: &str = "%Y-%m-%d %H:%M:%S";
+
+    pub fn serialize<S>(date: &Option<DateTime<Utc>>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match date {
+            Some(date) => {
+                let s = date.format(FORMAT).to_string();
+                serializer.serialize_str(&s)
+            }
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<DateTime<Utc>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: Option<String> = Option::deserialize(deserializer)?;
+        s.map(|s| {
+            Utc.datetime_from_str(&s, FORMAT)
+                .map_err(serde::de::Error::custom)
+        })
+        .transpose()
     }
 }
 
@@ -92,7 +124,7 @@ impl TryFrom<std::collections::HashMap<String, i32>> for PaprikaStatus {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct PaprikaRecipeHash {
     pub uid: String,
     pub hash: String,
@@ -167,6 +199,94 @@ pub struct PaprikaAisle {
     pub order_flag: i32,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PaprikaMenu {
+    pub uid: String,
+    pub name: String,
+    pub notes: String,
+    pub order_flag: i32,
+    pub days: i32,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PaprikaMenuItem {
+    pub uid: String,
+    pub name: String,
+    pub order_flag: i32,
+    pub recipe_uid: String,
+    pub menu_uid: String,
+    pub type_uid: String,
+    pub day: i32,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PaprikaPhoto {
+    pub uid: String,
+    pub filename: String,
+    pub recipe_uid: String,
+    pub order_flag: i32,
+    pub name: String,
+    pub hash: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PaprikaMealType {
+    pub uid: String,
+    pub name: String,
+    pub order_flag: i32,
+    pub color: String,
+    pub export_all_day: bool,
+    pub export_time: i32,
+    pub original_type: i32,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PaprikaPantryItem {
+    pub uid: String,
+    pub ingredient: String,
+    pub aisle: String,
+    #[serde(default, with = "paprika_optional_date_format")]
+    pub expiration_date: Option<chrono::DateTime<chrono::Utc>>,
+    pub has_expiration: bool,
+    pub in_stock: bool,
+    #[serde(with = "paprika_date_format")]
+    pub purchase_date: chrono::DateTime<chrono::Utc>,
+    pub quantity: String,
+    pub aisle_uid: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PaprikaGroceryIngredient {
+    pub uid: String,
+    pub name: String,
+    pub aisle_uid: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PaprikaGroceryList {
+    pub uid: String,
+    pub name: String,
+    pub order_flag: i32,
+    pub is_default: bool,
+    pub reminders_list: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PaprikaBookmark {
+    pub uid: String,
+    pub title: String,
+    pub url: String,
+    pub order_flag: i32,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PaprikaCategory {
+    pub uid: String,
+    pub order_flag: i32,
+    pub name: String,
+    pub parent_uid: Option<String>,
+}
+
 pub trait PaprikaId {
     fn paprika_id(&self) -> String;
 }
@@ -201,37 +321,57 @@ impl PaprikaId for PaprikaAisle {
     }
 }
 
-pub trait PaprikaCompare {
-    fn paprika_compare(&self, rhs: &Self) -> bool;
-}
-
-impl PaprikaCompare for PaprikaRecipeHash {
-    fn paprika_compare(&self, rhs: &Self) -> bool {
-        self.hash == rhs.hash
+impl PaprikaId for PaprikaMenu {
+    fn paprika_id(&self) -> String {
+        self.uid.to_owned()
     }
 }
 
-impl PaprikaCompare for PaprikaRecipe {
-    fn paprika_compare(&self, rhs: &Self) -> bool {
-        self.hash == rhs.hash
+impl PaprikaId for PaprikaMenuItem {
+    fn paprika_id(&self) -> String {
+        self.uid.to_owned()
     }
 }
 
-impl PaprikaCompare for PaprikaMeal {
-    fn paprika_compare(&self, rhs: &Self) -> bool {
-        self == rhs
+impl PaprikaId for PaprikaPhoto {
+    fn paprika_id(&self) -> String {
+        self.uid.to_owned()
     }
 }
 
-impl PaprikaCompare for PaprikaGroceryItem {
-    fn paprika_compare(&self, rhs: &Self) -> bool {
-        self == rhs
+impl PaprikaId for PaprikaMealType {
+    fn paprika_id(&self) -> String {
+        self.uid.to_owned()
     }
 }
 
-impl PaprikaCompare for PaprikaAisle {
-    fn paprika_compare(&self, rhs: &Self) -> bool {
-        self == rhs
+impl PaprikaId for PaprikaPantryItem {
+    fn paprika_id(&self) -> String {
+        self.uid.to_owned()
+    }
+}
+
+impl PaprikaId for PaprikaGroceryIngredient {
+    fn paprika_id(&self) -> String {
+        self.uid.to_owned()
+    }
+}
+
+impl PaprikaId for PaprikaGroceryList {
+    fn paprika_id(&self) -> String {
+        self.uid.to_owned()
+    }
+}
+
+impl PaprikaId for PaprikaBookmark {
+    fn paprika_id(&self) -> String {
+        self.uid.to_owned()
+    }
+}
+
+impl PaprikaId for PaprikaCategory {
+    fn paprika_id(&self) -> String {
+        self.uid.to_owned()
     }
 }
 
@@ -371,6 +511,129 @@ impl PaprikaClient {
 
         Ok(aisles)
     }
+
+    pub async fn menus(&self) -> Result<Vec<PaprikaMenu>, Error> {
+        let req = self
+            .client
+            .get(format!("{}/sync/menus/", API_ENDPOINT))
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let PaprikaResult { result: menus } = req.json().await?;
+
+        Ok(menus)
+    }
+
+    pub async fn menu_items(&self) -> Result<Vec<PaprikaMenuItem>, Error> {
+        let req = self
+            .client
+            .get(format!("{}/sync/menuitems/", API_ENDPOINT))
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let PaprikaResult { result: menu_items } = req.json().await?;
+
+        Ok(menu_items)
+    }
+
+    pub async fn photos(&self) -> Result<Vec<PaprikaPhoto>, Error> {
+        let req = self
+            .client
+            .get(format!("{}/sync/photos/", API_ENDPOINT))
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let PaprikaResult { result: photos } = req.json().await?;
+
+        Ok(photos)
+    }
+
+    pub async fn meal_types(&self) -> Result<Vec<PaprikaMealType>, Error> {
+        let req = self
+            .client
+            .get(format!("{}/sync/mealtypes/", API_ENDPOINT))
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let PaprikaResult { result: meal_types } = req.json().await?;
+
+        Ok(meal_types)
+    }
+
+    pub async fn pantry_items(&self) -> Result<Vec<PaprikaPantryItem>, Error> {
+        let req = self
+            .client
+            .get(format!("{}/sync/pantry/", API_ENDPOINT))
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let PaprikaResult {
+            result: pantry_items,
+        } = req.json().await?;
+
+        Ok(pantry_items)
+    }
+
+    pub async fn grocery_ingredients(&self) -> Result<Vec<PaprikaGroceryIngredient>, Error> {
+        let req = self
+            .client
+            .get(format!("{}/sync/groceryingredients/", API_ENDPOINT))
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let PaprikaResult {
+            result: grocery_ingredients,
+        } = req.json().await?;
+
+        Ok(grocery_ingredients)
+    }
+
+    pub async fn grocery_lists(&self) -> Result<Vec<PaprikaGroceryList>, Error> {
+        let req = self
+            .client
+            .get(format!("{}/sync/grocerylists/", API_ENDPOINT))
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let PaprikaResult {
+            result: grocery_lists,
+        } = req.json().await?;
+
+        Ok(grocery_lists)
+    }
+
+    pub async fn bookmarks(&self) -> Result<Vec<PaprikaBookmark>, Error> {
+        let req = self
+            .client
+            .get(format!("{}/sync/bookmarks/", API_ENDPOINT))
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let PaprikaResult { result: bookmarks } = req.json().await?;
+
+        Ok(bookmarks)
+    }
+
+    pub async fn categories(&self) -> Result<Vec<PaprikaCategory>, Error> {
+        let req = self
+            .client
+            .get(format!("{}/sync/categories/", API_ENDPOINT))
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let PaprikaResult { result: categories } = req.json().await?;
+
+        Ok(categories)
+    }
 }
 
 #[cfg(test)]
@@ -455,5 +718,92 @@ mod tests {
             .await
             .expect("should be able to get aisles");
         println!("aisles: {:#?}", aisles);
+    }
+
+    #[tokio::test]
+    async fn test_menus() {
+        let paprika = get_paprika().await;
+        let menus = paprika.menus().await.expect("should be able to get menus");
+        println!("menus: {:#?}", menus);
+    }
+
+    #[tokio::test]
+    async fn test_menu_items() {
+        let paprika = get_paprika().await;
+        let menu_items = paprika
+            .menu_items()
+            .await
+            .expect("should be able to get menu items");
+        println!("menu items: {:#?}", menu_items);
+    }
+
+    #[tokio::test]
+    async fn test_photos() {
+        let paprika = get_paprika().await;
+        let photos = paprika
+            .photos()
+            .await
+            .expect("should be able to get photos");
+        println!("photos: {:#?}", photos);
+    }
+
+    #[tokio::test]
+    async fn test_meal_types() {
+        let paprika = get_paprika().await;
+        let meal_types = paprika
+            .meal_types()
+            .await
+            .expect("should be able to get meal types");
+        println!("meal types: {:#?}", meal_types);
+    }
+
+    #[tokio::test]
+    async fn test_pantry() {
+        let paprika = get_paprika().await;
+        let pantry_items = paprika
+            .pantry_items()
+            .await
+            .expect("should be able to get pantry");
+        println!("pantry: {:#?}", pantry_items);
+    }
+
+    #[tokio::test]
+    async fn test_grocery_ingredients() {
+        let paprika = get_paprika().await;
+        let grocery_ingredients = paprika
+            .grocery_ingredients()
+            .await
+            .expect("should be able to get grocery ingredients");
+        println!("grocery ingredients: {:#?}", grocery_ingredients);
+    }
+
+    #[tokio::test]
+    async fn test_grocery_lists() {
+        let paprika = get_paprika().await;
+        let grocery_lists = paprika
+            .grocery_lists()
+            .await
+            .expect("should be able to get grocery lists");
+        println!("grocery lists: {:#?}", grocery_lists);
+    }
+
+    #[tokio::test]
+    async fn test_bookmarks() {
+        let paprika = get_paprika().await;
+        let bookmarks = paprika
+            .bookmarks()
+            .await
+            .expect("should be able to get bookmarks");
+        println!("bookmarks: {:#?}", bookmarks);
+    }
+
+    #[tokio::test]
+    async fn test_categories() {
+        let paprika = get_paprika().await;
+        let categories = paprika
+            .categories()
+            .await
+            .expect("should be able to get categories");
+        println!("categories: {:#?}", categories);
     }
 }
