@@ -318,7 +318,7 @@ struct GroceryItem {
     aisle_uid: String,
     list_uid: String,
 
-    recipe_uid: Option<String>,
+    recipe: Option<String>,
 }
 
 impl GroceryItem {
@@ -334,7 +334,7 @@ impl GroceryItem {
                 purchased,
                 aisle_uid,
                 list_uid,
-                recipe_uid
+                recipe
             FROM
                 grocery_item"#
         )
@@ -355,7 +355,7 @@ impl GroceryItem {
                 purchased,
                 aisle_uid,
                 list_uid,
-                recipe_uid
+                recipe
             FROM
                 grocery_item
             WHERE
@@ -394,13 +394,8 @@ impl GroceryItem {
         self.purchased
     }
 
-    async fn recipe(&self, context: &Context) -> Result<Option<Recipe>, FieldError> {
-        let recipe_uid = match &self.recipe_uid {
-            Some(recipe_uid) => recipe_uid,
-            None => return Ok(None),
-        };
-
-        Recipe::from_uid(context, recipe_uid).await
+    fn recipe_name(&self) -> Option<&str> {
+        self.recipe.as_deref()
     }
 
     async fn aisle(&self, context: &Context) -> Result<Aisle, FieldError> {

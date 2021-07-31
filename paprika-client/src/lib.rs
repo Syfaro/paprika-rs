@@ -8,6 +8,12 @@ static API_ENDPOINT: &str = "https://www.paprikaapp.com/api/v2";
 pub enum Error {
     #[error("network error: {0}")]
     Network(#[from] reqwest::Error),
+    #[error("encoding error: {0}")]
+    Encoding(#[from] serde_json::Error),
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("paprika error: {0}")]
+    Paprika(#[from] PaprikaError),
 }
 
 pub struct PaprikaClient {
@@ -16,9 +22,18 @@ pub struct PaprikaClient {
     pub token: String,
 }
 
-#[derive(Deserialize)]
-struct PaprikaResult<D> {
-    result: D,
+#[derive(Deserialize, Debug, thiserror::Error)]
+#[error("{message} (code {code})")]
+pub struct PaprikaError {
+    pub code: i32,
+    pub message: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
+enum PaprikaResult<D> {
+    Result(D),
+    Error(PaprikaError),
 }
 
 mod paprika_date_format {
@@ -404,9 +419,11 @@ impl PaprikaClient {
             .error_for_status()?;
 
         tracing::debug!("got paprika token");
-        let PaprikaResult {
-            result: PaprikaToken { token },
-        } = req.json().await?;
+        let result: PaprikaResult<PaprikaToken> = req.json().await?;
+        let token = match result {
+            PaprikaResult::Result(token) => token.token,
+            PaprikaResult::Error(err) => return Err(err.into()),
+        };
 
         tracing::trace!("rebuilding http client with authorization headers");
         let client = reqwest::Client::builder()
@@ -432,207 +449,83 @@ impl PaprikaClient {
         Ok(paprika)
     }
 
-    pub async fn status(&self) -> Result<PaprikaStatus, Error> {
+    async fn json_get<S, D>(&self, endpoint: S) -> Result<D, Error>
+    where
+        S: AsRef<str>,
+        D: serde::de::DeserializeOwned,
+    {
         let req = self
             .client
-            .get(format!("{}/sync/status/", API_ENDPOINT))
+            .get(format!("{}/{}/", API_ENDPOINT, endpoint.as_ref()))
             .send()
             .await?
             .error_for_status()?;
 
-        let PaprikaResult { result: status } = req.json().await?;
+        let result: PaprikaResult<D> = req.json().await?;
+        match result {
+            PaprikaResult::Result(result) => Ok(result),
+            PaprikaResult::Error(err) => Err(err.into()),
+        }
+    }
 
-        Ok(status)
+    pub async fn status(&self) -> Result<PaprikaStatus, Error> {
+        self.json_get("sync/status").await
     }
 
     pub async fn recipes(&self) -> Result<Vec<PaprikaRecipeHash>, Error> {
-        let req = self
-            .client
-            .get(format!("{}/sync/recipes/", API_ENDPOINT))
-            .send()
-            .await?
-            .error_for_status()?;
-
-        let PaprikaResult {
-            result: recipe_hashes,
-        } = req.json().await?;
-
-        Ok(recipe_hashes)
+        self.json_get("sync/recipes").await
     }
 
     pub async fn recipe<S: AsRef<str>>(&self, uid: S) -> Result<PaprikaRecipe, Error> {
-        let req = self
-            .client
-            .get(format!("{}/sync/recipe/{}/", API_ENDPOINT, uid.as_ref()))
-            .send()
-            .await?
-            .error_for_status()?;
-
-        let PaprikaResult { result: recipe } = req.json().await?;
-
-        Ok(recipe)
+        self.json_get(format!("sync/recipe/{}", uid.as_ref())).await
     }
 
     pub async fn meals(&self) -> Result<Vec<PaprikaMeal>, Error> {
-        let req = self
-            .client
-            .get(format!("{}/sync/meals/", API_ENDPOINT))
-            .send()
-            .await?
-            .error_for_status()?;
-
-        let PaprikaResult { result: meals } = req.json().await?;
-
-        Ok(meals)
+        self.json_get("sync/meals").await
     }
 
     pub async fn groceries(&self) -> Result<Vec<PaprikaGroceryItem>, Error> {
-        let req = self
-            .client
-            .get(format!("{}/sync/groceries/", API_ENDPOINT))
-            .send()
-            .await?
-            .error_for_status()?;
-
-        let PaprikaResult { result: meals } = req.json().await?;
-
-        Ok(meals)
+        self.json_get("sync/groceries").await
     }
 
     pub async fn aisles(&self) -> Result<Vec<PaprikaAisle>, Error> {
-        let req = self
-            .client
-            .get(format!("{}/sync/groceryaisles/", API_ENDPOINT))
-            .send()
-            .await?
-            .error_for_status()?;
-
-        let PaprikaResult { result: aisles } = req.json().await?;
-
-        Ok(aisles)
+        self.json_get("sync/groceryaisles").await
     }
 
     pub async fn menus(&self) -> Result<Vec<PaprikaMenu>, Error> {
-        let req = self
-            .client
-            .get(format!("{}/sync/menus/", API_ENDPOINT))
-            .send()
-            .await?
-            .error_for_status()?;
-
-        let PaprikaResult { result: menus } = req.json().await?;
-
-        Ok(menus)
+        self.json_get("sync/menus").await
     }
 
     pub async fn menu_items(&self) -> Result<Vec<PaprikaMenuItem>, Error> {
-        let req = self
-            .client
-            .get(format!("{}/sync/menuitems/", API_ENDPOINT))
-            .send()
-            .await?
-            .error_for_status()?;
-
-        let PaprikaResult { result: menu_items } = req.json().await?;
-
-        Ok(menu_items)
+        self.json_get("sync/menuitems").await
     }
 
     pub async fn photos(&self) -> Result<Vec<PaprikaPhoto>, Error> {
-        let req = self
-            .client
-            .get(format!("{}/sync/photos/", API_ENDPOINT))
-            .send()
-            .await?
-            .error_for_status()?;
-
-        let PaprikaResult { result: photos } = req.json().await?;
-
-        Ok(photos)
+        self.json_get("sync/photos").await
     }
 
     pub async fn meal_types(&self) -> Result<Vec<PaprikaMealType>, Error> {
-        let req = self
-            .client
-            .get(format!("{}/sync/mealtypes/", API_ENDPOINT))
-            .send()
-            .await?
-            .error_for_status()?;
-
-        let PaprikaResult { result: meal_types } = req.json().await?;
-
-        Ok(meal_types)
+        self.json_get("sync/mealtypes").await
     }
 
     pub async fn pantry_items(&self) -> Result<Vec<PaprikaPantryItem>, Error> {
-        let req = self
-            .client
-            .get(format!("{}/sync/pantry/", API_ENDPOINT))
-            .send()
-            .await?
-            .error_for_status()?;
-
-        let PaprikaResult {
-            result: pantry_items,
-        } = req.json().await?;
-
-        Ok(pantry_items)
+        self.json_get("sync/pantry").await
     }
 
     pub async fn grocery_ingredients(&self) -> Result<Vec<PaprikaGroceryIngredient>, Error> {
-        let req = self
-            .client
-            .get(format!("{}/sync/groceryingredients/", API_ENDPOINT))
-            .send()
-            .await?
-            .error_for_status()?;
-
-        let PaprikaResult {
-            result: grocery_ingredients,
-        } = req.json().await?;
-
-        Ok(grocery_ingredients)
+        self.json_get("sync/groceryingredients").await
     }
 
     pub async fn grocery_lists(&self) -> Result<Vec<PaprikaGroceryList>, Error> {
-        let req = self
-            .client
-            .get(format!("{}/sync/grocerylists/", API_ENDPOINT))
-            .send()
-            .await?
-            .error_for_status()?;
-
-        let PaprikaResult {
-            result: grocery_lists,
-        } = req.json().await?;
-
-        Ok(grocery_lists)
+        self.json_get("sync/grocerylists").await
     }
 
     pub async fn bookmarks(&self) -> Result<Vec<PaprikaBookmark>, Error> {
-        let req = self
-            .client
-            .get(format!("{}/sync/bookmarks/", API_ENDPOINT))
-            .send()
-            .await?
-            .error_for_status()?;
-
-        let PaprikaResult { result: bookmarks } = req.json().await?;
-
-        Ok(bookmarks)
+        self.json_get("sync/bookmarks").await
     }
 
     pub async fn categories(&self) -> Result<Vec<PaprikaCategory>, Error> {
-        let req = self
-            .client
-            .get(format!("{}/sync/categories/", API_ENDPOINT))
-            .send()
-            .await?
-            .error_for_status()?;
-
-        let PaprikaResult { result: categories } = req.json().await?;
-
-        Ok(categories)
+        self.json_get("sync/categories").await
     }
 }
 

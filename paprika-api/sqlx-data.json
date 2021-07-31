@@ -181,74 +181,6 @@
       "nullable": []
     }
   },
-  "2bf19c4ae45b3b2a7d167a0275e889c0e2cf4ff135f7704b722bc4a055eb42c3": {
-    "query": "SELECT\n                id,\n                name,\n                ingredient,\n                quantity,\n                instruction,\n                purchased,\n                aisle_uid,\n                list_uid,\n                recipe_uid\n            FROM\n                grocery_item\n            WHERE\n                list_uid = $1",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Int4"
-        },
-        {
-          "ordinal": 1,
-          "name": "name",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 2,
-          "name": "ingredient",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 3,
-          "name": "quantity",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 4,
-          "name": "instruction",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 5,
-          "name": "purchased",
-          "type_info": "Bool"
-        },
-        {
-          "ordinal": 6,
-          "name": "aisle_uid",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 7,
-          "name": "list_uid",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 8,
-          "name": "recipe_uid",
-          "type_info": "Text"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      },
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        true
-      ]
-    }
-  },
   "2cf36b0b0f66de7113e062e7ea16f663951e989a4173ba06d86bcc8ef1da868a": {
     "query": "UPDATE pantry_item SET ingredient = $2, aisle = $3, expiration_date = $4, has_expiration = $5, in_stock = $6, purchase_date = $7, quantity = $8, aisle_uid = $9 WHERE uid = $1",
     "describe": {
@@ -662,8 +594,46 @@
       "nullable": []
     }
   },
-  "58c14acc4560b566b359e16a80d5ec4e4d0b00eeb3af0f1b70109380569c98d0": {
-    "query": "SELECT\n                id,\n                name,\n                ingredient,\n                quantity,\n                instruction,\n                purchased,\n                aisle_uid,\n                list_uid,\n                recipe_uid\n            FROM\n                grocery_item",
+  "5a3d716295dcc098f7517fdeb6613448aca4c3a3eac99c25c4ea9cde096435fb": {
+    "query": "SELECT id, uid, name, parent_uid FROM category WHERE uid = any($1)",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "parent_uid",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "TextArray"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        true
+      ]
+    }
+  },
+  "5ac4a5c11caef7053524b56c5232a98d7aa6287f49a511e1ab11e4131b0739d5": {
+    "query": "SELECT\n                id,\n                name,\n                ingredient,\n                quantity,\n                instruction,\n                purchased,\n                aisle_uid,\n                list_uid,\n                recipe\n            FROM\n                grocery_item\n            WHERE\n                list_uid = $1",
     "describe": {
       "columns": [
         {
@@ -708,57 +678,21 @@
         },
         {
           "ordinal": 8,
-          "name": "recipe_uid",
-          "type_info": "Text"
-        }
-      ],
-      "parameters": {
-        "Left": []
-      },
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        true
-      ]
-    }
-  },
-  "5a3d716295dcc098f7517fdeb6613448aca4c3a3eac99c25c4ea9cde096435fb": {
-    "query": "SELECT id, uid, name, parent_uid FROM category WHERE uid = any($1)",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Int4"
-        },
-        {
-          "ordinal": 1,
-          "name": "uid",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 2,
-          "name": "name",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 3,
-          "name": "parent_uid",
+          "name": "recipe",
           "type_info": "Text"
         }
       ],
       "parameters": {
         "Left": [
-          "TextArray"
+          "Text"
         ]
       },
       "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
         false,
         false,
         false,
@@ -1511,6 +1445,72 @@
         false,
         false,
         false
+      ]
+    }
+  },
+  "a8f65698e39af09e5d94b1dc26611e630923390121763131cf7b7dcc7027e602": {
+    "query": "SELECT\n                id,\n                name,\n                ingredient,\n                quantity,\n                instruction,\n                purchased,\n                aisle_uid,\n                list_uid,\n                recipe\n            FROM\n                grocery_item",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "ingredient",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "quantity",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "instruction",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 5,
+          "name": "purchased",
+          "type_info": "Bool"
+        },
+        {
+          "ordinal": 6,
+          "name": "aisle_uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "list_uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "recipe",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true
       ]
     }
   },
