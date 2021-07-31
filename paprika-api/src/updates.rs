@@ -22,6 +22,8 @@ pub async fn check_for_updates(
 
     let mut changes = HashMap::with_capacity(4);
 
+    let mut tx = pool.begin().await?;
+
     for (name, position) in status {
         let database_position =
             sqlx::query_scalar!("SELECT position FROM status WHERE name = $1", name)
@@ -34,21 +36,21 @@ pub async fn check_for_updates(
         if !matches_latest {
             tracing::info!("section {} needs update", name);
             let item_changes = match name.as_str() {
-                "menus" => update_collection::<PaprikaMenu>(paprika, pool).await?,
-                "photos" => update_collection::<PaprikaPhoto>(paprika, pool).await?,
-                "mealtypes" => update_collection::<PaprikaMealType>(paprika, pool).await?,
-                "recipes" => update_collection::<PaprikaRecipeHash>(paprika, pool).await?,
-                "pantry" => update_collection::<PaprikaPantryItem>(paprika, pool).await?,
-                "meals" => update_collection::<PaprikaMeal>(paprika, pool).await?,
+                "menus" => update_collection::<PaprikaMenu>(paprika, &mut tx).await?,
+                "photos" => update_collection::<PaprikaPhoto>(paprika, &mut tx).await?,
+                "mealtypes" => update_collection::<PaprikaMealType>(paprika, &mut tx).await?,
+                "recipes" => update_collection::<PaprikaRecipeHash>(paprika, &mut tx).await?,
+                "pantry" => update_collection::<PaprikaPantryItem>(paprika, &mut tx).await?,
+                "meals" => update_collection::<PaprikaMeal>(paprika, &mut tx).await?,
                 "groceryingredients" => {
-                    update_collection::<PaprikaGroceryIngredient>(paprika, pool).await?
+                    update_collection::<PaprikaGroceryIngredient>(paprika, &mut tx).await?
                 }
-                "groceries" => update_collection::<PaprikaGroceryItem>(paprika, pool).await?,
-                "groceryaisles" => update_collection::<PaprikaAisle>(paprika, pool).await?,
-                "grocerylists" => update_collection::<PaprikaGroceryList>(paprika, pool).await?,
-                "bookmarks" => update_collection::<PaprikaBookmark>(paprika, pool).await?,
-                "menuitems" => update_collection::<PaprikaMenuItem>(paprika, pool).await?,
-                "categories" => update_collection::<PaprikaCategory>(paprika, pool).await?,
+                "groceries" => update_collection::<PaprikaGroceryItem>(paprika, &mut tx).await?,
+                "groceryaisles" => update_collection::<PaprikaAisle>(paprika, &mut tx).await?,
+                "grocerylists" => update_collection::<PaprikaGroceryList>(paprika, &mut tx).await?,
+                "bookmarks" => update_collection::<PaprikaBookmark>(paprika, &mut tx).await?,
+                "menuitems" => update_collection::<PaprikaMenuItem>(paprika, &mut tx).await?,
+                "categories" => update_collection::<PaprikaCategory>(paprika, &mut tx).await?,
                 _ => unreachable!("unknown paprika changed item"),
             };
 
@@ -63,6 +65,8 @@ pub async fn check_for_updates(
         sqlx::query!("INSERT INTO status (name, position) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET position = EXCLUDED.position", name, position).execute(pool).await?;
     }
 
+    tx.commit().await?;
+
     tracing::debug!("observed changes: {:?}", changes);
 
     Ok(changes)
@@ -70,24 +74,26 @@ pub async fn check_for_updates(
 
 #[async_trait::async_trait]
 trait UpdateItem: Sized {
-    async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>>;
+    async fn existing_items(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> anyhow::Result<Vec<Self>>;
     async fn current_items(paprika: &PaprikaClient) -> anyhow::Result<Vec<Self>>;
 
     async fn on_add(
         paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()>;
 
     async fn on_change(
         paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()>;
 
     async fn on_delete(
         paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         old_item: &Self,
     ) -> anyhow::Result<()>;
 }
@@ -95,14 +101,14 @@ trait UpdateItem: Sized {
 /// Update a collection to match Paprika's current state.
 async fn update_collection<C>(
     paprika: &PaprikaClient,
-    pool: &sqlx::Pool<sqlx::Postgres>,
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 ) -> anyhow::Result<HashMap<State, usize>>
 where
     C: PaprikaId + Eq + UpdateItem,
 {
     tracing::debug!("updating collection");
 
-    let existing_items: HashMap<String, C> = C::existing_items(pool)
+    let existing_items: HashMap<String, C> = C::existing_items(tx)
         .await?
         .into_iter()
         .map(|item| (item.paprika_id(), item))
@@ -150,17 +156,17 @@ where
             State::Added => {
                 tracing::info!("item {} was added", id);
                 let item = current_items.get(*id).unwrap();
-                C::on_add(paprika, pool, item).await?;
+                C::on_add(paprika, tx, item).await?;
             }
             State::Changed => {
                 tracing::info!("item {} was changed", id);
                 let item = current_items.get(*id).unwrap();
-                C::on_change(paprika, pool, item).await?;
+                C::on_change(paprika, tx, item).await?;
             }
             State::Deleted => {
                 tracing::info!("item {} was deleted", id);
                 let item = existing_items.get(*id).unwrap();
-                C::on_delete(paprika, pool, item).await?;
+                C::on_delete(paprika, tx, item).await?;
             }
             _ => tracing::info!("item {} was unchanged", id),
         }
@@ -173,13 +179,15 @@ where
 
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaRecipeHash {
-    async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
+    async fn existing_items(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> anyhow::Result<Vec<Self>> {
         let recipes = sqlx::query!("SELECT uid, hash FROM recipe")
             .map(|row| PaprikaRecipeHash {
                 uid: row.uid,
                 hash: row.hash,
             })
-            .fetch_all(pool)
+            .fetch_all(tx)
             .await?
             .into_iter()
             .collect();
@@ -194,7 +202,7 @@ impl UpdateItem for PaprikaRecipeHash {
 
     async fn on_add(
         paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         let recipe = paprika.recipe(&new_item.uid).await?;
@@ -230,7 +238,7 @@ impl UpdateItem for PaprikaRecipeHash {
             recipe.total_time,
             recipe.uid,
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
 
         Ok(())
@@ -238,7 +246,7 @@ impl UpdateItem for PaprikaRecipeHash {
 
     async fn on_change(
         paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         let recipe = paprika.recipe(&new_item.uid).await?;
@@ -300,7 +308,7 @@ impl UpdateItem for PaprikaRecipeHash {
             recipe.source_url,
             recipe.total_time
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
 
         Ok(())
@@ -308,11 +316,11 @@ impl UpdateItem for PaprikaRecipeHash {
 
     async fn on_delete(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         old_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!("DELETE FROM recipe WHERE uid = $1", old_item.uid)
-            .execute(pool)
+            .execute(tx)
             .await?;
 
         Ok(())
@@ -321,12 +329,14 @@ impl UpdateItem for PaprikaRecipeHash {
 
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaMeal {
-    async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
+    async fn existing_items(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> anyhow::Result<Vec<Self>> {
         let meals = sqlx::query_as!(
             Self,
             "SELECT uid, recipe_uid, date, meal_type, name, order_flag, type_uid FROM meal"
         )
-        .fetch_all(pool)
+        .fetch_all(tx)
         .await?
         .into_iter()
         .collect();
@@ -340,7 +350,7 @@ impl UpdateItem for PaprikaMeal {
 
     async fn on_add(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -353,14 +363,14 @@ impl UpdateItem for PaprikaMeal {
             new_item.order_flag,
             new_item.type_uid
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_change(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -373,18 +383,18 @@ impl UpdateItem for PaprikaMeal {
             new_item.order_flag,
             new_item.type_uid
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_delete(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         old_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!("DELETE FROM meal WHERE uid = $1", old_item.uid)
-            .execute(pool)
+            .execute(tx)
             .await?;
         Ok(())
     }
@@ -392,9 +402,11 @@ impl UpdateItem for PaprikaMeal {
 
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaGroceryItem {
-    async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
+    async fn existing_items(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> anyhow::Result<Vec<Self>> {
         let groceries = sqlx::query_as!(Self, "SELECT uid, recipe_uid, name, order_flag, purchased, aisle, ingredient, recipe, instruction, quantity, separate, aisle_uid, list_uid FROM grocery_item")
-            .fetch_all(pool)
+            .fetch_all(tx)
             .await?
             .into_iter()
             .collect();
@@ -408,7 +420,7 @@ impl UpdateItem for PaprikaGroceryItem {
 
     async fn on_add(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -427,14 +439,14 @@ impl UpdateItem for PaprikaGroceryItem {
             new_item.aisle_uid,
             new_item.list_uid
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_change(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -453,18 +465,18 @@ impl UpdateItem for PaprikaGroceryItem {
             new_item.aisle_uid,
             new_item.list_uid
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_delete(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         old_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!("DELETE FROM grocery_item WHERE uid = $1", old_item.uid)
-            .execute(pool)
+            .execute(tx)
             .await?;
         Ok(())
     }
@@ -472,9 +484,11 @@ impl UpdateItem for PaprikaGroceryItem {
 
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaAisle {
-    async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
+    async fn existing_items(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> anyhow::Result<Vec<Self>> {
         let aisles = sqlx::query_as!(Self, "SELECT uid, name, order_flag FROM aisle")
-            .fetch_all(pool)
+            .fetch_all(tx)
             .await?
             .into_iter()
             .collect();
@@ -488,7 +502,7 @@ impl UpdateItem for PaprikaAisle {
 
     async fn on_add(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -497,14 +511,14 @@ impl UpdateItem for PaprikaAisle {
             new_item.name,
             new_item.order_flag
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_change(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -513,18 +527,18 @@ impl UpdateItem for PaprikaAisle {
             new_item.name,
             new_item.order_flag
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_delete(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         old_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!("DELETE FROM aisle WHERE uid = $1", old_item.uid)
-            .execute(pool)
+            .execute(tx)
             .await?;
         Ok(())
     }
@@ -532,9 +546,11 @@ impl UpdateItem for PaprikaAisle {
 
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaMenu {
-    async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
+    async fn existing_items(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> anyhow::Result<Vec<Self>> {
         let menus = sqlx::query_as!(Self, "SELECT uid, name, notes, order_flag, days FROM menu")
-            .fetch_all(pool)
+            .fetch_all(tx)
             .await?
             .into_iter()
             .collect();
@@ -548,7 +564,7 @@ impl UpdateItem for PaprikaMenu {
 
     async fn on_add(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -559,14 +575,14 @@ impl UpdateItem for PaprikaMenu {
             new_item.order_flag,
             new_item.days
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_change(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -577,18 +593,18 @@ impl UpdateItem for PaprikaMenu {
             new_item.order_flag,
             new_item.days
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_delete(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         old_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!("DELETE FROM menu WHERE uid = $1", old_item.uid)
-            .execute(pool)
+            .execute(tx)
             .await?;
         Ok(())
     }
@@ -596,12 +612,14 @@ impl UpdateItem for PaprikaMenu {
 
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaPhoto {
-    async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
+    async fn existing_items(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> anyhow::Result<Vec<Self>> {
         let photos = sqlx::query_as!(
             Self,
             "SELECT uid, filename, recipe_uid, order_flag, name, hash FROM photo"
         )
-        .fetch_all(pool)
+        .fetch_all(tx)
         .await?
         .into_iter()
         .collect();
@@ -615,7 +633,7 @@ impl UpdateItem for PaprikaPhoto {
 
     async fn on_add(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -627,14 +645,14 @@ impl UpdateItem for PaprikaPhoto {
             new_item.name,
             new_item.hash
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_change(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -646,18 +664,18 @@ impl UpdateItem for PaprikaPhoto {
             new_item.name,
             new_item.hash
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_delete(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         old_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!("DELETE FROM photo WHERE uid = $1", old_item.uid)
-            .execute(pool)
+            .execute(tx)
             .await?;
         Ok(())
     }
@@ -665,9 +683,11 @@ impl UpdateItem for PaprikaPhoto {
 
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaMealType {
-    async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
+    async fn existing_items(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> anyhow::Result<Vec<Self>> {
         let meal_types = sqlx::query_as!(Self, "SELECT uid, name, order_flag, color, export_all_day, export_time, original_type FROM meal_type")
-            .fetch_all(pool)
+            .fetch_all(tx)
             .await?
             .into_iter()
             .collect();
@@ -681,7 +701,7 @@ impl UpdateItem for PaprikaMealType {
 
     async fn on_add(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -694,14 +714,14 @@ impl UpdateItem for PaprikaMealType {
             new_item.export_time,
             new_item.original_type
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_change(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -714,18 +734,18 @@ impl UpdateItem for PaprikaMealType {
             new_item.export_time,
             new_item.original_type
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_delete(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         old_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!("DELETE FROM meal_type WHERE uid = $1", old_item.uid)
-            .execute(pool)
+            .execute(tx)
             .await?;
         Ok(())
     }
@@ -733,9 +753,11 @@ impl UpdateItem for PaprikaMealType {
 
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaPantryItem {
-    async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
+    async fn existing_items(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> anyhow::Result<Vec<Self>> {
         let pantry_items = sqlx::query_as!(Self, "SELECT uid, ingredient, aisle, expiration_date, has_expiration, in_stock, purchase_date, quantity, aisle_uid FROM pantry_item")
-            .fetch_all(pool)
+            .fetch_all(tx)
             .await?
             .into_iter()
             .collect();
@@ -749,7 +771,7 @@ impl UpdateItem for PaprikaPantryItem {
 
     async fn on_add(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -764,14 +786,14 @@ impl UpdateItem for PaprikaPantryItem {
             new_item.quantity,
             new_item.aisle_uid
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_change(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -786,18 +808,18 @@ impl UpdateItem for PaprikaPantryItem {
             new_item.quantity,
             new_item.aisle_uid
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_delete(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         old_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!("DELETE FROM pantry_item WHERE uid = $1", old_item.uid)
-            .execute(pool)
+            .execute(tx)
             .await?;
         Ok(())
     }
@@ -805,10 +827,12 @@ impl UpdateItem for PaprikaPantryItem {
 
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaGroceryIngredient {
-    async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
+    async fn existing_items(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> anyhow::Result<Vec<Self>> {
         let grocery_ingredients =
             sqlx::query_as!(Self, "SELECT uid, name, aisle_uid FROM grocery_ingredient")
-                .fetch_all(pool)
+                .fetch_all(tx)
                 .await?
                 .into_iter()
                 .collect();
@@ -822,7 +846,7 @@ impl UpdateItem for PaprikaGroceryIngredient {
 
     async fn on_add(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -831,14 +855,14 @@ impl UpdateItem for PaprikaGroceryIngredient {
             new_item.name,
             new_item.aisle_uid
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_change(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -847,21 +871,21 @@ impl UpdateItem for PaprikaGroceryIngredient {
             new_item.name,
             new_item.aisle_uid
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_delete(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         old_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
             "DELETE FROM grocery_ingredient WHERE uid = $1",
             old_item.uid
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
@@ -869,12 +893,14 @@ impl UpdateItem for PaprikaGroceryIngredient {
 
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaGroceryList {
-    async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
+    async fn existing_items(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> anyhow::Result<Vec<Self>> {
         let grocery_lists = sqlx::query_as!(
             Self,
             "SELECT uid, name, order_flag, is_default, reminders_list FROM grocery_list"
         )
-        .fetch_all(pool)
+        .fetch_all(tx)
         .await?
         .into_iter()
         .collect();
@@ -888,7 +914,7 @@ impl UpdateItem for PaprikaGroceryList {
 
     async fn on_add(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -899,14 +925,14 @@ impl UpdateItem for PaprikaGroceryList {
             new_item.is_default,
             new_item.reminders_list
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_change(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -917,18 +943,18 @@ impl UpdateItem for PaprikaGroceryList {
             new_item.is_default,
             new_item.reminders_list
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_delete(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         old_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!("DELETE FROM grocery_list WHERE uid = $1", old_item.uid)
-            .execute(pool)
+            .execute(tx)
             .await?;
         Ok(())
     }
@@ -936,9 +962,11 @@ impl UpdateItem for PaprikaGroceryList {
 
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaBookmark {
-    async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
+    async fn existing_items(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> anyhow::Result<Vec<Self>> {
         let bookmarks = sqlx::query_as!(Self, "SELECT uid, title, url, order_flag FROM bookmark")
-            .fetch_all(pool)
+            .fetch_all(tx)
             .await?
             .into_iter()
             .collect();
@@ -952,7 +980,7 @@ impl UpdateItem for PaprikaBookmark {
 
     async fn on_add(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -962,14 +990,14 @@ impl UpdateItem for PaprikaBookmark {
             new_item.url,
             new_item.order_flag
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_change(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -979,18 +1007,18 @@ impl UpdateItem for PaprikaBookmark {
             new_item.url,
             new_item.order_flag
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_delete(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         old_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!("DELETE FROM bookmark WHERE uid = $1", old_item.uid)
-            .execute(pool)
+            .execute(tx)
             .await?;
         Ok(())
     }
@@ -998,12 +1026,14 @@ impl UpdateItem for PaprikaBookmark {
 
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaMenuItem {
-    async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
+    async fn existing_items(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> anyhow::Result<Vec<Self>> {
         let menu_items = sqlx::query_as!(
             Self,
             "SELECT uid, name, order_flag, recipe_uid, menu_uid, type_uid, day FROM menu_item"
         )
-        .fetch_all(pool)
+        .fetch_all(tx)
         .await?
         .into_iter()
         .collect();
@@ -1017,7 +1047,7 @@ impl UpdateItem for PaprikaMenuItem {
 
     async fn on_add(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -1030,14 +1060,14 @@ impl UpdateItem for PaprikaMenuItem {
             new_item.type_uid,
             new_item.day
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_change(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -1050,18 +1080,18 @@ impl UpdateItem for PaprikaMenuItem {
             new_item.type_uid,
             new_item.day
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_delete(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         old_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!("DELETE FROM menu_item WHERE uid = $1", old_item.uid)
-            .execute(pool)
+            .execute(tx)
             .await?;
         Ok(())
     }
@@ -1069,12 +1099,14 @@ impl UpdateItem for PaprikaMenuItem {
 
 #[async_trait::async_trait]
 impl UpdateItem for PaprikaCategory {
-    async fn existing_items(pool: &sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<Vec<Self>> {
+    async fn existing_items(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> anyhow::Result<Vec<Self>> {
         let categories = sqlx::query_as!(
             Self,
             "SELECT uid, order_flag, name, parent_uid FROM category"
         )
-        .fetch_all(pool)
+        .fetch_all(tx)
         .await?
         .into_iter()
         .collect();
@@ -1088,7 +1120,7 @@ impl UpdateItem for PaprikaCategory {
 
     async fn on_add(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -1098,14 +1130,14 @@ impl UpdateItem for PaprikaCategory {
             new_item.name,
             new_item.parent_uid
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_change(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         new_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!(
@@ -1115,18 +1147,18 @@ impl UpdateItem for PaprikaCategory {
             new_item.name,
             new_item.parent_uid
         )
-        .execute(pool)
+        .execute(tx)
         .await?;
         Ok(())
     }
 
     async fn on_delete(
         _paprika: &PaprikaClient,
-        pool: &sqlx::Pool<sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         old_item: &Self,
     ) -> anyhow::Result<()> {
         sqlx::query!("DELETE FROM category WHERE uid = $1", old_item.uid)
-            .execute(pool)
+            .execute(tx)
             .await?;
         Ok(())
     }

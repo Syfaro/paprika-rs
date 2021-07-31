@@ -34,9 +34,6 @@ async fn main() {
         .await
         .expect("could not run database migrations");
 
-    updates::check_for_updates(&paprika, &pool).await.unwrap();
-    tracing::info!("completed database update");
-
     let paprika = Arc::new(paprika);
 
     HttpServer::new(move || {
