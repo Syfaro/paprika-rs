@@ -3,11 +3,11 @@ use std::sync::Arc;
 use actix_cors::Cors;
 use actix_web::{http::header, web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use juniper::{
-    graphql_object, graphql_value, EmptyMutation, EmptySubscription, FieldError, GraphQLObject,
-    RootNode,
+    graphql_object, graphql_value, EmptySubscription, FieldError, GraphQLObject, RootNode,
 };
 use juniper_actix::{graphiql_handler, graphql_handler, playground_handler};
 use paprika_client::PaprikaClient;
+use updates::State;
 
 mod updates;
 
@@ -46,7 +46,7 @@ async fn main() {
             }))
             .app_data(web::Data::new(Schema::new(
                 Query,
-                Default::default(),
+                Mutation,
                 Default::default(),
             )))
             .wrap(
@@ -898,7 +898,26 @@ impl Query {
     }
 }
 
-type Schema = RootNode<'static, Query, EmptyMutation<Context>, EmptySubscription<Context>>;
+struct Mutation;
+
+#[graphql_object(context = Context)]
+impl Mutation {
+    async fn sync(context: &Context) -> Result<bool, FieldError> {
+        let changes = updates::check_for_updates(&context.paprika, &context.pool).await?;
+        let had_changes = if changes.contains_key(&State::Added)
+            || changes.contains_key(&State::Deleted)
+            || changes.contains_key(&State::Changed)
+        {
+            true
+        } else {
+            false
+        };
+
+        Ok(had_changes)
+    }
+}
+
+type Schema = RootNode<'static, Query, Mutation, EmptySubscription<Context>>;
 
 async fn graphiql_route() -> Result<HttpResponse, Error> {
     graphiql_handler("/graphql", None).await
