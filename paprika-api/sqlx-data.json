@@ -43,6 +43,16 @@
       "nullable": []
     }
   },
+  "1cbdb9bae766689eff8b8efa3d1140eab3cee8d76e74031df3cfae578079a3d8": {
+    "query": "SET CONSTRAINTS ALL DEFERRED",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": []
+    }
+  },
   "1ed0706610fc17dacb3c813a9622b39d8ec77cd394d918d9a89c05a9003b06e8": {
     "query": "SELECT uid, name, notes, order_flag, days FROM menu",
     "describe": {
@@ -2245,32 +2255,6 @@
       "nullable": []
     }
   },
-  "f40cd8669e71cfcd6a50267a7d3243a0f0e019eecd90b472d73ea0d0e76cb642": {
-    "query": "SELECT id, name FROM meal_type WHERE uid = $1",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Int4"
-        },
-        {
-          "ordinal": 1,
-          "name": "name",
-          "type_info": "Text"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      },
-      "nullable": [
-        false,
-        false
-      ]
-    }
-  },
   "f4ebb799343abd90c09a9ab7e385620bbd2b66add0f9ddeff928a477005b397c": {
     "query": "DELETE FROM photo WHERE uid = $1",
     "describe": {
@@ -2343,6 +2327,38 @@
         ]
       },
       "nullable": []
+    }
+  },
+  "f8a35c5107f929c2331457e38c8a58274f275135d9283317eb7660317eb44e3d": {
+    "query": "SELECT id, uid, name FROM meal_type WHERE uid = any($1)",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "name",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "TextArray"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false
+      ]
     }
   },
   "fdade371408ada297972d1ab3a5c64ee8044ade3445b4fc07af0c819de9a9234": {
