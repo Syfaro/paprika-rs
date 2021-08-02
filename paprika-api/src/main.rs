@@ -38,10 +38,9 @@ async fn main() {
 
     HttpServer::new(move || {
         App::new()
-            .app_data(web::Data::new(Context {
+            .app_data(web::Data::new(Connections {
                 pool: pool.clone(),
                 paprika: paprika.clone(),
-                meal_type_loader: Loader::new(MealTypeBatcher(pool.clone())),
             }))
             .app_data(web::Data::new(Schema::new(
                 Query,
@@ -74,15 +73,25 @@ async fn main() {
 struct DbError;
 
 #[derive(Clone)]
-struct Context {
+struct Connections {
     pool: sqlx::Pool<sqlx::Postgres>,
     paprika: Arc<PaprikaClient>,
+}
 
+#[derive(Clone)]
+struct Context {
+    conns: Arc<Connections>,
+
+    recipe_loader: Loader<String, Result<Recipe, DbError>, RecipeBatcher>,
+    aisle_loader: Loader<String, Result<Aisle, DbError>, AisleBatcher>,
     meal_type_loader: Loader<String, Result<MealType, DbError>, MealTypeBatcher>,
+    grocery_list_loader: Loader<String, Result<GroceryList, DbError>, GroceryListBatcher>,
+    menu_loader: Loader<String, Result<Menu, DbError>, MenuBatcher>,
 }
 
 impl juniper::Context for Context {}
 
+#[derive(Debug, Clone)]
 struct Recipe {
     id: i32,
     uid: String,
@@ -120,7 +129,7 @@ impl Recipe {
             FROM
                 recipe"#
         )
-        .fetch_all(&context.pool)
+        .fetch_all(&context.conns.pool)
         .await
         .map_err(|err| {
             tracing::error!("recipe fetch error: {:?}", err);
@@ -151,33 +160,7 @@ impl Recipe {
                 id = $1"#,
             id
         )
-        .fetch_optional(&context.pool)
-        .await
-        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
-    }
-
-    async fn from_uid(context: &Context, uid: &str) -> Result<Option<Recipe>, FieldError> {
-        sqlx::query_as!(
-            Recipe,
-            r#"SELECT
-                id,
-                uid,
-                name,
-                cook_time,
-                prep_time,
-                total_time,
-                description,
-                directions,
-                ingredients,
-                notes,
-                categories
-            FROM
-                recipe
-            WHERE
-                uid = $1"#,
-            uid
-        )
-        .fetch_optional(&context.pool)
+        .fetch_optional(&context.conns.pool)
         .await
         .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
@@ -188,7 +171,7 @@ impl Recipe {
             "SELECT id, uid, name, cook_time, prep_time, total_time, description, directions, ingredients, notes, categories FROM recipe WHERE $1 = any(categories)",
             category_uid
         )
-        .fetch_all(&context.pool)
+        .fetch_all(&context.conns.pool)
         .await
         .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
@@ -249,6 +232,46 @@ impl Recipe {
     }
 }
 
+struct RecipeBatcher(sqlx::Pool<sqlx::Postgres>);
+
+#[async_trait::async_trait]
+impl BatchFn<String, Result<Recipe, DbError>> for RecipeBatcher {
+    async fn load(
+        &mut self,
+        keys: &[String],
+    ) -> std::collections::HashMap<String, Result<Recipe, DbError>> {
+        let recipes = sqlx::query_as!(
+            Recipe,
+            "SELECT
+                id,
+                uid,
+                name,
+                cook_time,
+                prep_time,
+                total_time,
+                description,
+                directions,
+                ingredients,
+                notes,
+                categories
+            FROM
+                recipe
+            WHERE uid = any($1)",
+            keys
+        )
+        .fetch_all(&self.0)
+        .await;
+
+        match recipes {
+            Ok(recipes) => recipes
+                .into_iter()
+                .map(|recipe| (recipe.uid.clone(), Ok(recipe)))
+                .collect(),
+            Err(_err) => keys.iter().map(|k| (k.to_owned(), Err(DbError))).collect(),
+        }
+    }
+}
+
 struct Meal {
     id: i32,
     name: String,
@@ -264,7 +287,7 @@ impl Meal {
             Meal,
             r#"SELECT id, date, name, recipe_uid, type_uid FROM meal"#
         )
-        .fetch_all(&context.pool)
+        .fetch_all(&context.conns.pool)
         .await
         .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))?;
 
@@ -277,7 +300,7 @@ impl Meal {
             r#"SELECT id, date, name, recipe_uid, type_uid FROM meal WHERE recipe_uid = $1"#,
             recipe_uid
         )
-        .fetch_all(&context.pool)
+        .fetch_all(&context.conns.pool)
         .await
         .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))?;
 
@@ -299,8 +322,12 @@ impl Meal {
         self.date
     }
 
-    async fn recipe(&self, context: &Context) -> Result<Option<Recipe>, FieldError> {
-        Recipe::from_uid(context, &self.recipe_uid).await
+    async fn recipe(&self, context: &Context) -> Result<Recipe, FieldError> {
+        context
+            .recipe_loader
+            .load(self.recipe_uid.clone())
+            .await
+            .map_err(|_err| FieldError::new("item should always have recipe", graphql_value!(None)))
     }
 
     async fn meal_type(&self, context: &Context) -> Result<MealType, FieldError> {
@@ -346,7 +373,7 @@ impl GroceryItem {
             FROM
                 grocery_item"#
         )
-        .fetch_all(&context.pool)
+        .fetch_all(&context.conns.pool)
         .await
         .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
@@ -370,7 +397,7 @@ impl GroceryItem {
                 list_uid = $1"#,
             list_uid
         )
-        .fetch_all(&context.pool)
+        .fetch_all(&context.conns.pool)
         .await
         .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
@@ -407,40 +434,63 @@ impl GroceryItem {
     }
 
     async fn aisle(&self, context: &Context) -> Result<Aisle, FieldError> {
-        let aisle = Aisle::from_uid(context, &self.aisle_uid).await?;
-        aisle.ok_or_else(|| FieldError::new("item should always have aisle", graphql_value!(None)))
+        context
+            .aisle_loader
+            .load(self.aisle_uid.clone())
+            .await
+            .map_err(|_err| FieldError::new("item should always have aisle", graphql_value!(None)))
     }
 
     async fn list(&self, context: &Context) -> Result<GroceryList, FieldError> {
-        let list = GroceryList::from_uid(context, &self.list_uid).await?;
-        list.ok_or_else(|| FieldError::new("item should always have list", graphql_value!(None)))
+        context
+            .grocery_list_loader
+            .load(self.list_uid.clone())
+            .await
+            .map_err(|_err| {
+                FieldError::new("item should always have grocery list", graphql_value!(None))
+            })
     }
 }
 
-#[derive(GraphQLObject)]
+#[derive(GraphQLObject, Debug, Clone)]
 struct Aisle {
     id: i32,
+    #[graphql(skip)]
+    uid: String,
     name: String,
     order_flag: i32,
 }
 
-impl Aisle {
-    async fn from_uid(context: &Context, uid: &str) -> Result<Option<Aisle>, FieldError> {
-        sqlx::query_as!(
+struct AisleBatcher(sqlx::Pool<sqlx::Postgres>);
+
+#[async_trait::async_trait]
+impl BatchFn<String, Result<Aisle, DbError>> for AisleBatcher {
+    async fn load(
+        &mut self,
+        keys: &[String],
+    ) -> std::collections::HashMap<String, Result<Aisle, DbError>> {
+        let aisles = sqlx::query_as!(
             Aisle,
-            r#"SELECT
+            "SELECT
                 id,
+                uid,
                 name,
                 order_flag
             FROM
                 aisle
-            WHERE
-                uid = $1"#,
-            uid
+            WHERE uid = any($1)",
+            keys
         )
-        .fetch_optional(&context.pool)
-        .await
-        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
+        .fetch_all(&self.0)
+        .await;
+
+        match aisles {
+            Ok(aisles) => aisles
+                .into_iter()
+                .map(|aisle| (aisle.uid.clone(), Ok(aisle)))
+                .collect(),
+            Err(_err) => keys.iter().map(|k| (k.to_owned(), Err(DbError))).collect(),
+        }
     }
 }
 
@@ -469,7 +519,7 @@ impl PantryItem {
             FROM
                 pantry_item"#
         )
-        .fetch_all(&context.pool)
+        .fetch_all(&context.conns.pool)
         .await
         .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
@@ -502,8 +552,11 @@ impl PantryItem {
     }
 
     async fn aisle(&self, context: &Context) -> Result<Aisle, FieldError> {
-        let aisle = Aisle::from_uid(context, &self.aisle_uid).await?;
-        aisle.ok_or_else(|| FieldError::new("item should always have type", graphql_value!(None)))
+        context
+            .aisle_loader
+            .load(self.aisle_uid.clone())
+            .await
+            .map_err(|_err| FieldError::new("item should always have aisle", graphql_value!(None)))
     }
 }
 
@@ -567,7 +620,7 @@ impl MenuItem {
             "SELECT id, name, recipe_uid, menu_uid, type_uid, day FROM menu_item WHERE menu_uid = $1",
             menu_uid
         )
-        .fetch_all(&context.pool)
+        .fetch_all(&context.conns.pool)
         .await
         .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
@@ -588,14 +641,19 @@ impl MenuItem {
     }
 
     async fn menu(&self, context: &Context) -> Result<Menu, FieldError> {
-        let menu = Menu::from_uid(context, &self.menu_uid).await?;
-        menu.ok_or_else(|| FieldError::new("item should always have menu", graphql_value!(None)))
+        context
+            .menu_loader
+            .load(self.menu_uid.clone())
+            .await
+            .map_err(|_err| FieldError::new("item should always have menu", graphql_value!(None)))
     }
 
     async fn recipe(&self, context: &Context) -> Result<Recipe, FieldError> {
-        let recipe = Recipe::from_uid(context, &self.recipe_uid).await?;
-        recipe
-            .ok_or_else(|| FieldError::new("item should always have recipe", graphql_value!(None)))
+        context
+            .recipe_loader
+            .load(self.recipe_uid.clone())
+            .await
+            .map_err(|_err| FieldError::new("item should always have recipe", graphql_value!(None)))
     }
 
     async fn meal_type(&self, context: &Context) -> Result<MealType, FieldError> {
@@ -609,6 +667,7 @@ impl MenuItem {
     }
 }
 
+#[derive(Clone, Debug)]
 struct Menu {
     id: i32,
     uid: String,
@@ -620,7 +679,7 @@ struct Menu {
 impl Menu {
     async fn all(context: &Context) -> Result<Vec<Self>, FieldError> {
         sqlx::query_as!(Self, "SELECT id, uid, name, notes, days FROM menu")
-            .fetch_all(&context.pool)
+            .fetch_all(&context.conns.pool)
             .await
             .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
@@ -631,7 +690,7 @@ impl Menu {
             r"SELECT id, uid, name, notes, days FROM menu WHERE uid = $1",
             uid
         )
-        .fetch_optional(&context.pool)
+        .fetch_optional(&context.conns.pool)
         .await
         .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
@@ -660,6 +719,32 @@ impl Menu {
     }
 }
 
+struct MenuBatcher(sqlx::Pool<sqlx::Postgres>);
+
+#[async_trait::async_trait]
+impl BatchFn<String, Result<Menu, DbError>> for MenuBatcher {
+    async fn load(
+        &mut self,
+        keys: &[String],
+    ) -> std::collections::HashMap<String, Result<Menu, DbError>> {
+        let menus = sqlx::query_as!(
+            Menu,
+            "SELECT id, uid, name, notes, days FROM menu WHERE uid = any($1)",
+            keys
+        )
+        .fetch_all(&self.0)
+        .await;
+
+        match menus {
+            Ok(menus) => menus
+                .into_iter()
+                .map(|menu| (menu.uid.clone(), Ok(menu)))
+                .collect(),
+            Err(_err) => keys.iter().map(|k| (k.to_owned(), Err(DbError))).collect(),
+        }
+    }
+}
+
 struct Bookmark {
     id: i32,
     title: String,
@@ -669,7 +754,7 @@ struct Bookmark {
 impl Bookmark {
     async fn all(context: &Context) -> Result<Vec<Self>, FieldError> {
         sqlx::query_as!(Self, "SELECT id, title, url FROM bookmark")
-            .fetch_all(&context.pool)
+            .fetch_all(&context.conns.pool)
             .await
             .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
@@ -700,7 +785,7 @@ struct Category {
 impl Category {
     async fn all(context: &Context) -> Result<Vec<Self>, FieldError> {
         sqlx::query_as!(Self, r"SELECT id, uid, name, parent_uid FROM category")
-            .fetch_all(&context.pool)
+            .fetch_all(&context.conns.pool)
             .await
             .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
@@ -711,18 +796,22 @@ impl Category {
             r"SELECT id, uid, name, parent_uid FROM category WHERE uid = $1",
             uid
         )
-        .fetch_optional(&context.pool)
+        .fetch_optional(&context.conns.pool)
         .await
         .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
 
     async fn from_uids(context: &Context, uids: &[String]) -> Result<Vec<Self>, FieldError> {
+        if uids.is_empty() {
+            return Ok(Vec::new());
+        }
+
         sqlx::query_as!(
             Self,
             r"SELECT id, uid, name, parent_uid FROM category WHERE uid = any($1)",
             uids
         )
-        .fetch_all(&context.pool)
+        .fetch_all(&context.conns.pool)
         .await
         .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
@@ -761,7 +850,7 @@ struct Photo {
 impl Photo {
     async fn all(context: &Context) -> Result<Vec<Self>, FieldError> {
         sqlx::query_as!(Self, r"SELECT id, filename, recipe_uid, hash FROM photo")
-            .fetch_all(&context.pool)
+            .fetch_all(&context.conns.pool)
             .await
             .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
@@ -772,7 +861,7 @@ impl Photo {
             r"SELECT id, filename, recipe_uid, hash FROM photo WHERE recipe_uid = $1",
             recipe_uid
         )
-        .fetch_all(&context.pool)
+        .fetch_all(&context.conns.pool)
         .await
         .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
@@ -793,12 +882,15 @@ impl Photo {
     }
 
     async fn recipe(&self, context: &Context) -> Result<Recipe, FieldError> {
-        let recipe = Recipe::from_uid(context, &self.recipe_uid).await?;
-        recipe
-            .ok_or_else(|| FieldError::new("item should always have recipe", graphql_value!(None)))
+        context
+            .recipe_loader
+            .load(self.recipe_uid.clone())
+            .await
+            .map_err(|_err| FieldError::new("item should always have recipe", graphql_value!(None)))
     }
 }
 
+#[derive(Debug, Clone)]
 struct GroceryList {
     id: i32,
     uid: String,
@@ -809,20 +901,9 @@ struct GroceryList {
 impl GroceryList {
     async fn all(context: &Context) -> Result<Vec<Self>, FieldError> {
         sqlx::query_as!(Self, r"SELECT id, uid, name, is_default FROM grocery_list")
-            .fetch_all(&context.pool)
+            .fetch_all(&context.conns.pool)
             .await
             .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
-    }
-
-    async fn from_uid(context: &Context, uid: &str) -> Result<Option<Self>, FieldError> {
-        sqlx::query_as!(
-            Self,
-            "SELECT id, uid, name, is_default FROM grocery_list WHERE uid = $1",
-            uid
-        )
-        .fetch_optional(&context.pool)
-        .await
-        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
 }
 
@@ -845,6 +926,32 @@ impl GroceryList {
     }
 }
 
+struct GroceryListBatcher(sqlx::Pool<sqlx::Postgres>);
+
+#[async_trait::async_trait]
+impl BatchFn<String, Result<GroceryList, DbError>> for GroceryListBatcher {
+    async fn load(
+        &mut self,
+        keys: &[String],
+    ) -> std::collections::HashMap<String, Result<GroceryList, DbError>> {
+        let grocery_lists = sqlx::query_as!(
+            GroceryList,
+            "SELECT id, uid, name, is_default FROM grocery_list WHERE uid = any($1)",
+            keys
+        )
+        .fetch_all(&self.0)
+        .await;
+
+        match grocery_lists {
+            Ok(grocery_lists) => grocery_lists
+                .into_iter()
+                .map(|grocery_list| (grocery_list.uid.clone(), Ok(grocery_list)))
+                .collect(),
+            Err(_err) => keys.iter().map(|k| (k.to_owned(), Err(DbError))).collect(),
+        }
+    }
+}
+
 struct GroceryIngredient {
     id: i32,
     name: String,
@@ -854,7 +961,7 @@ struct GroceryIngredient {
 impl GroceryIngredient {
     async fn all(context: &Context) -> Result<Vec<Self>, FieldError> {
         sqlx::query_as!(Self, r"SELECT id, name, aisle_uid FROM grocery_ingredient")
-            .fetch_all(&context.pool)
+            .fetch_all(&context.conns.pool)
             .await
             .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
@@ -872,7 +979,14 @@ impl GroceryIngredient {
 
     async fn aisle(&self, context: &Context) -> Result<Option<Aisle>, FieldError> {
         if let Some(aisle_uid) = &self.aisle_uid {
-            Aisle::from_uid(context, aisle_uid).await
+            context
+                .aisle_loader
+                .load(aisle_uid.clone())
+                .await
+                .map(Some)
+                .map_err(|_err| {
+                    FieldError::new("item should always have aisle", graphql_value!(None))
+                })
         } else {
             Ok(None)
         }
@@ -933,7 +1047,8 @@ struct Mutation;
 #[graphql_object(context = Context)]
 impl Mutation {
     async fn sync(context: &Context) -> Result<bool, FieldError> {
-        let changes = updates::check_for_updates(&context.paprika, &context.pool).await?;
+        let changes =
+            updates::check_for_updates(&context.conns.paprika, &context.conns.pool).await?;
         let had_changes = changes.contains_key(&State::Added)
             || changes.contains_key(&State::Deleted)
             || changes.contains_key(&State::Changed);
@@ -956,7 +1071,17 @@ async fn graphql_route(
     req: HttpRequest,
     payload: web::Payload,
     schema: web::Data<Schema>,
-    context: web::Data<Context>,
+    conns: web::Data<Connections>,
 ) -> Result<HttpResponse, Error> {
+    let context = Context {
+        recipe_loader: Loader::new(RecipeBatcher(conns.pool.clone())),
+        aisle_loader: Loader::new(AisleBatcher(conns.pool.clone())),
+        meal_type_loader: Loader::new(MealTypeBatcher(conns.pool.clone())),
+        grocery_list_loader: Loader::new(GroceryListBatcher(conns.pool.clone())),
+        menu_loader: Loader::new(MenuBatcher(conns.pool.clone())),
+
+        conns: (*conns).clone(),
+    };
+
     graphql_handler(&schema, &context, req, payload).await
 }

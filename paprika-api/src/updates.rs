@@ -23,7 +23,9 @@ pub async fn check_for_updates(
     let mut changes = HashMap::with_capacity(4);
 
     let mut tx = pool.begin().await?;
-    sqlx::query!("SET CONSTRAINTS ALL DEFERRED").execute(&mut tx).await?;
+    sqlx::query!("SET CONSTRAINTS ALL DEFERRED")
+        .execute(&mut tx)
+        .await?;
 
     for (name, position) in status {
         let database_position =
