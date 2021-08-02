@@ -125,7 +125,7 @@ impl Recipe {
                 directions,
                 ingredients,
                 notes,
-                categories
+                array(select category_uid from recipe_category where recipe_category.recipe_uid = recipe.uid) "categories!"
             FROM
                 recipe"#
         )
@@ -153,7 +153,7 @@ impl Recipe {
                 directions,
                 ingredients,
                 notes,
-                categories
+                array(select category_uid from recipe_category where recipe_category.recipe_uid = recipe.uid) "categories!"
             FROM
                 recipe
             WHERE
@@ -168,7 +168,24 @@ impl Recipe {
     async fn in_category(context: &Context, category_uid: &str) -> Result<Vec<Self>, FieldError> {
         sqlx::query_as!(
             Self,
-            "SELECT id, uid, name, cook_time, prep_time, total_time, description, directions, ingredients, notes, categories FROM recipe WHERE $1 = any(categories)",
+            r#"SELECT
+                id,
+                uid,
+                name,
+                cook_time,
+                prep_time,
+                total_time,
+                description,
+                directions,
+                ingredients,
+                notes,
+                array(select category_uid from recipe_category where recipe_category.recipe_uid = recipe.uid) "categories!"
+            FROM
+                recipe
+            JOIN recipe_category
+                ON recipe.uid = recipe_category.recipe_uid
+            WHERE
+                recipe_category.category_uid = $1"#,
             category_uid
         )
         .fetch_all(&context.conns.pool)

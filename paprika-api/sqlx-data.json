@@ -95,38 +95,6 @@
       ]
     }
   },
-  "1f4bcec4ba01419edc9b883f6d6288a4287404d0768058fb12dfaa2d0156af14": {
-    "query": "SELECT\n                id,\n                name,\n                order_flag\n            FROM\n                aisle\n            WHERE\n                uid = $1",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Int4"
-        },
-        {
-          "ordinal": 1,
-          "name": "name",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 2,
-          "name": "order_flag",
-          "type_info": "Int4"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      },
-      "nullable": [
-        false,
-        false,
-        false
-      ]
-    }
-  },
   "1fb95fe0a3ce8271f1c304ede6b0c32f614c1622ff1a1888cf2e980ee07d87c5": {
     "query": "INSERT INTO photo (uid, filename, recipe_uid, order_flag, name, hash) VALUES ($1, $2, $3, $4, $5, $6)",
     "describe": {
@@ -242,84 +210,6 @@
         ]
       },
       "nullable": [
-        false,
-        false,
-        false,
-        false
-      ]
-    }
-  },
-  "36e622d5fb65fc2caf1e7a683f8ab32a2e01139e97f255a0913cf70c88076882": {
-    "query": "SELECT\n                id,\n                uid,\n                name,\n                cook_time,\n                prep_time,\n                total_time,\n                description,\n                directions,\n                ingredients,\n                notes,\n                categories\n            FROM\n                recipe",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Int4"
-        },
-        {
-          "ordinal": 1,
-          "name": "uid",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 2,
-          "name": "name",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 3,
-          "name": "cook_time",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 4,
-          "name": "prep_time",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 5,
-          "name": "total_time",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 6,
-          "name": "description",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 7,
-          "name": "directions",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 8,
-          "name": "ingredients",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 9,
-          "name": "notes",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 10,
-          "name": "categories",
-          "type_info": "TextArray"
-        }
-      ],
-      "parameters": {
-        "Left": []
-      },
-      "nullable": [
-        false,
-        false,
-        false,
-        true,
-        true,
-        true,
-        true,
         false,
         false,
         false,
@@ -460,6 +350,44 @@
       ]
     }
   },
+  "4f6442b2a0a50786231fea1c65627864a92f7c22acb85564ccb922c1146dd030": {
+    "query": "SELECT\n                id,\n                uid,\n                name,\n                order_flag\n            FROM\n                aisle\n            WHERE uid = any($1)",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "order_flag",
+          "type_info": "Int4"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "TextArray"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        false
+      ]
+    }
+  },
   "4fab0e3c28970d34f992772d4febd44385c17ed505eefd1ba5446fde0d184257": {
     "query": "DELETE FROM bookmark WHERE uid = $1",
     "describe": {
@@ -578,6 +506,19 @@
         false,
         false
       ]
+    }
+  },
+  "56a257172170a946c449e2b01571916aec0c5fce7d6833db72b1c0c13944fb43": {
+    "query": "INSERT INTO recipe_category (recipe_uid, category_uid) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text"
+        ]
+      },
+      "nullable": []
     }
   },
   "5806c51a622d270698457a8612aad367841a3dc5f8ccd8bb5701d265632b7f64": {
@@ -800,82 +741,20 @@
       ]
     }
   },
-  "60dd009600cd1924d1a73ff7c89540a83a05c66b85fb392b8da2bc17f3fa24bd": {
-    "query": "SELECT\n                id,\n                uid,\n                name,\n                cook_time,\n                prep_time,\n                total_time,\n                description,\n                directions,\n                ingredients,\n                notes,\n                categories\n            FROM\n                recipe\n            WHERE\n                id = $1",
+  "606d30cf1432d6a0c49ca84c014e72f1fbbd32bda2e3da0d0b48ad237da70e92": {
+    "query": "SELECT uid FROM category",
     "describe": {
       "columns": [
         {
           "ordinal": 0,
-          "name": "id",
-          "type_info": "Int4"
-        },
-        {
-          "ordinal": 1,
           "name": "uid",
           "type_info": "Text"
-        },
-        {
-          "ordinal": 2,
-          "name": "name",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 3,
-          "name": "cook_time",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 4,
-          "name": "prep_time",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 5,
-          "name": "total_time",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 6,
-          "name": "description",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 7,
-          "name": "directions",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 8,
-          "name": "ingredients",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 9,
-          "name": "notes",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 10,
-          "name": "categories",
-          "type_info": "TextArray"
         }
       ],
       "parameters": {
-        "Left": [
-          "Int4"
-        ]
+        "Left": []
       },
       "nullable": [
-        false,
-        false,
-        false,
-        true,
-        true,
-        true,
-        true,
-        false,
-        false,
-        false,
         false
       ]
     }
@@ -1031,6 +910,86 @@
       "nullable": []
     }
   },
+  "790558923bd1391ec8a9759a29ab0220542cd7e3d84bfa18e2b266e8b6e313a8": {
+    "query": "SELECT\n                id,\n                uid,\n                name,\n                cook_time,\n                prep_time,\n                total_time,\n                description,\n                directions,\n                ingredients,\n                notes,\n                array(select category_uid from recipe_category where recipe_category.recipe_uid = recipe.uid) \"categories!\"\n            FROM\n                recipe\n            JOIN recipe_category\n                ON recipe.uid = recipe_category.recipe_uid\n            WHERE\n                recipe_category.category_uid = $1",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "cook_time",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "prep_time",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 5,
+          "name": "total_time",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 6,
+          "name": "description",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "directions",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "ingredients",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 9,
+          "name": "notes",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 10,
+          "name": "categories!",
+          "type_info": "TextArray"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        true,
+        true,
+        true,
+        true,
+        false,
+        false,
+        false,
+        null
+      ]
+    }
+  },
   "79824bd75dd580a1557e34690cd21b37fecc2e8001acf2d04afd7e6f94028ee1": {
     "query": "SELECT uid, filename, recipe_uid, order_flag, name, hash FROM photo",
     "describe": {
@@ -1109,6 +1068,50 @@
         ]
       },
       "nullable": []
+    }
+  },
+  "825e75f1008aa9ea2b5af2b18eb06cbf1114ee97090e6e780804ba12fd82068f": {
+    "query": "SELECT id, uid, name, notes, days FROM menu WHERE uid = any($1)",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "notes",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "days",
+          "type_info": "Int4"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "TextArray"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
     }
   },
   "830bb44070978e6f5537f7c3d7ae6225df8ee5fd01f9d776363b7d1b7c393aac": {
@@ -1272,8 +1275,8 @@
       "nullable": []
     }
   },
-  "8c49e9feeaca0e91c96f35dc511aaebac2934caf794a04adc56be9e79623f2e7": {
-    "query": "SELECT\n                id,\n                uid,\n                name,\n                cook_time,\n                prep_time,\n                total_time,\n                description,\n                directions,\n                ingredients,\n                notes,\n                categories\n            FROM\n                recipe\n            WHERE\n                uid = $1",
+  "893168f12ced1bcd490594795e1f93eb35b432031f97473c6f6d0354d8b44e6d": {
+    "query": "SELECT\n                id,\n                uid,\n                name,\n                cook_time,\n                prep_time,\n                total_time,\n                description,\n                directions,\n                ingredients,\n                notes,\n                array(select category_uid from recipe_category where recipe_category.recipe_uid = recipe.uid) \"categories!\"\n            FROM\n                recipe\n            WHERE\n                id = $1",
     "describe": {
       "columns": [
         {
@@ -1328,13 +1331,13 @@
         },
         {
           "ordinal": 10,
-          "name": "categories",
+          "name": "categories!",
           "type_info": "TextArray"
         }
       ],
       "parameters": {
         "Left": [
-          "Text"
+          "Int4"
         ]
       },
       "nullable": [
@@ -1345,6 +1348,122 @@
         true,
         true,
         true,
+        false,
+        false,
+        false,
+        null
+      ]
+    }
+  },
+  "8b6467fbb15e95dd48998a413547fd4984d6c35bb3ec33ff03fa95b0e862fa3d": {
+    "query": "SELECT\n                id,\n                uid,\n                name,\n                cook_time,\n                prep_time,\n                total_time,\n                description,\n                directions,\n                ingredients,\n                notes,\n                array(select category_uid from recipe_category where recipe_category.recipe_uid = recipe.uid) \"categories!\"\n            FROM\n                recipe",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "cook_time",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "prep_time",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 5,
+          "name": "total_time",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 6,
+          "name": "description",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "directions",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "ingredients",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 9,
+          "name": "notes",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 10,
+          "name": "categories!",
+          "type_info": "TextArray"
+        }
+      ],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        true,
+        true,
+        true,
+        true,
+        false,
+        false,
+        false,
+        null
+      ]
+    }
+  },
+  "97897b788e8c7d7e8d7acc466a2c6220b5b0a69db1565e24818bba5dcb58543f": {
+    "query": "SELECT id, uid, name, is_default FROM grocery_list WHERE uid = any($1)",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "is_default",
+          "type_info": "Bool"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "TextArray"
+        ]
+      },
+      "nullable": [
         false,
         false,
         false,
@@ -1376,86 +1495,6 @@
         ]
       },
       "nullable": []
-    }
-  },
-  "a6231bb1d490e7bd843d1d63a2c52fcbf30b9c2d2d3c4e385e050c4777ad5962": {
-    "query": "SELECT id, uid, name, cook_time, prep_time, total_time, description, directions, ingredients, notes, categories FROM recipe WHERE $1 = any(categories)",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Int4"
-        },
-        {
-          "ordinal": 1,
-          "name": "uid",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 2,
-          "name": "name",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 3,
-          "name": "cook_time",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 4,
-          "name": "prep_time",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 5,
-          "name": "total_time",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 6,
-          "name": "description",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 7,
-          "name": "directions",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 8,
-          "name": "ingredients",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 9,
-          "name": "notes",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 10,
-          "name": "categories",
-          "type_info": "TextArray"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      },
-      "nullable": [
-        false,
-        false,
-        false,
-        true,
-        true,
-        true,
-        true,
-        false,
-        false,
-        false,
-        false
-      ]
     }
   },
   "a8f65698e39af09e5d94b1dc26611e630923390121763131cf7b7dcc7027e602": {
@@ -1594,50 +1633,6 @@
       ]
     }
   },
-  "ad23a63aa8e85cf52ddc557cd19267b3f51c24a4fbcf234acff44bdce3f34366": {
-    "query": "SELECT id, uid, name, notes, days FROM menu WHERE uid = $1",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Int4"
-        },
-        {
-          "ordinal": 1,
-          "name": "uid",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 2,
-          "name": "name",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 3,
-          "name": "notes",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 4,
-          "name": "days",
-          "type_info": "Int4"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      },
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false
-      ]
-    }
-  },
   "b6e2b4c74927a4a02e9ef44f1d334479fc49d6d59d07d079a7a57095b9474661": {
     "query": "DELETE FROM grocery_ingredient WHERE uid = $1",
     "describe": {
@@ -1695,6 +1690,86 @@
         false,
         false,
         true
+      ]
+    }
+  },
+  "bbb35302850aeff4d69483c26fba6acca18c1821860f37c6a4367dcfe488717b": {
+    "query": "SELECT\n                id,\n                uid,\n                name,\n                cook_time,\n                prep_time,\n                total_time,\n                description,\n                directions,\n                ingredients,\n                notes,\n                categories\n            FROM\n                recipe\n            WHERE uid = any($1)",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "uid",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "cook_time",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "prep_time",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 5,
+          "name": "total_time",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 6,
+          "name": "description",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "directions",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "ingredients",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 9,
+          "name": "notes",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 10,
+          "name": "categories",
+          "type_info": "TextArray"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "TextArray"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        true,
+        true,
+        true,
+        true,
+        false,
+        false,
+        false,
+        false
       ]
     }
   },
@@ -1756,39 +1831,25 @@
       "nullable": []
     }
   },
-  "c8c449349c0e9f9b68a67817ba5adafcd99663dc19a1ec8741a7b9f090d6518c": {
-    "query": "SELECT id, uid, name, is_default FROM grocery_list WHERE uid = $1",
+  "c9953fa491a4c18ad2ae5ce8302bab66abd4d3c4eda75886869a42e1c76e6e72": {
+    "query": "SELECT uid, categories FROM recipe",
     "describe": {
       "columns": [
         {
           "ordinal": 0,
-          "name": "id",
-          "type_info": "Int4"
-        },
-        {
-          "ordinal": 1,
           "name": "uid",
           "type_info": "Text"
         },
         {
-          "ordinal": 2,
-          "name": "name",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 3,
-          "name": "is_default",
-          "type_info": "Bool"
+          "ordinal": 1,
+          "name": "categories",
+          "type_info": "TextArray"
         }
       ],
       "parameters": {
-        "Left": [
-          "Text"
-        ]
+        "Left": []
       },
       "nullable": [
-        false,
-        false,
         false,
         false
       ]

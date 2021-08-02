@@ -3,6 +3,7 @@ use std::{
     convert::TryInto,
 };
 
+use futures::TryStreamExt;
 use paprika_client::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -68,6 +69,8 @@ pub async fn check_for_updates(
         sqlx::query!("INSERT INTO status (name, position) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET position = EXCLUDED.position", name, position).execute(pool).await?;
     }
 
+    PaprikaRecipeHash::pre_commit(paprika, &mut tx).await?;
+
     tx.commit().await?;
 
     tracing::debug!("observed changes: {:?}", changes);
@@ -99,6 +102,13 @@ trait UpdateItem: Sized {
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         old_item: &Self,
     ) -> anyhow::Result<()>;
+
+    async fn pre_commit(
+        _paprika: &PaprikaClient,
+        _tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 /// Update a collection to match Paprika's current state.
@@ -325,6 +335,49 @@ impl UpdateItem for PaprikaRecipeHash {
         sqlx::query!("DELETE FROM recipe WHERE uid = $1", old_item.uid)
             .execute(tx)
             .await?;
+
+        Ok(())
+    }
+
+    async fn pre_commit(
+        _paprika: &PaprikaClient,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> anyhow::Result<()> {
+        let categories: HashSet<String> = sqlx::query_scalar!("SELECT uid FROM category")
+            .fetch_all(&mut *tx)
+            .await?
+            .into_iter()
+            .collect();
+
+        let mut recipes = sqlx::query!("SELECT uid, categories FROM recipe").fetch(&mut *tx);
+
+        let mut associations = HashMap::new();
+
+        while let Some(recipe) = recipes.try_next().await? {
+            for recipe_category in recipe.categories {
+                if !categories.contains(&recipe_category) {
+                    tracing::warn!(
+                        "recipe {} references category {} that does not exist",
+                        recipe.uid,
+                        recipe_category
+                    );
+                    continue;
+                }
+
+                associations.insert(recipe.uid.clone(), recipe_category);
+            }
+        }
+
+        drop(recipes);
+
+        for (recipe, category) in associations {
+            sqlx::query!(
+                "INSERT INTO recipe_category (recipe_uid, category_uid) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                recipe,
+                category
+            )
+            .execute(&mut *tx).await?;
+        }
 
         Ok(())
     }
