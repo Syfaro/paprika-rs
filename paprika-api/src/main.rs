@@ -87,6 +87,7 @@ struct Context {
     meal_type_loader: Loader<String, Result<MealType, DbError>, MealTypeBatcher>,
     grocery_list_loader: Loader<String, Result<GroceryList, DbError>, GroceryListBatcher>,
     menu_loader: Loader<String, Result<Menu, DbError>, MenuBatcher>,
+    category_loader: Loader<String, Result<Category, DbError>, CategoryBatcher>,
 }
 
 impl juniper::Context for Context {}
@@ -241,7 +242,17 @@ impl Recipe {
     }
 
     async fn categories(&self, context: &Context) -> Result<Vec<Category>, FieldError> {
-        Category::from_uids(context, &self.categories).await
+        context
+            .category_loader
+            .load_many(self.categories.clone())
+            .await
+            .into_iter()
+            .map(|(_uid, category)| {
+                category.map_err(|_err| {
+                    FieldError::new("item should always have category", graphql_value!(None))
+                })
+            })
+            .collect()
     }
 
     async fn photos(&self, context: &Context) -> Result<Vec<Photo>, FieldError> {
@@ -781,6 +792,7 @@ impl Bookmark {
     }
 }
 
+#[derive(Clone, Debug)]
 struct Category {
     id: i32,
     uid: String,
@@ -794,32 +806,6 @@ impl Category {
             .fetch_all(&context.conns.pool)
             .await
             .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
-    }
-
-    async fn from_uid(context: &Context, uid: &str) -> Result<Option<Self>, FieldError> {
-        sqlx::query_as!(
-            Self,
-            r"SELECT id, uid, name, parent_uid FROM category WHERE uid = $1",
-            uid
-        )
-        .fetch_optional(&context.conns.pool)
-        .await
-        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
-    }
-
-    async fn from_uids(context: &Context, uids: &[String]) -> Result<Vec<Self>, FieldError> {
-        if uids.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        sqlx::query_as!(
-            Self,
-            r"SELECT id, uid, name, parent_uid FROM category WHERE uid = any($1)",
-            uids
-        )
-        .fetch_all(&context.conns.pool)
-        .await
-        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
 }
 
@@ -835,7 +821,14 @@ impl Category {
 
     async fn parent(&self, context: &Context) -> Result<Option<Self>, FieldError> {
         if let Some(parent_uid) = &self.parent_uid {
-            Category::from_uid(context, parent_uid).await
+            context
+                .category_loader
+                .load(parent_uid.clone())
+                .await
+                .map(Some)
+                .map_err(|_err| {
+                    FieldError::new("item should always have parent", graphql_value!(None))
+                })
         } else {
             Ok(None)
         }
@@ -843,6 +836,32 @@ impl Category {
 
     async fn recipes(&self, context: &Context) -> Result<Vec<Recipe>, FieldError> {
         Recipe::in_category(context, &self.uid).await
+    }
+}
+
+struct CategoryBatcher(sqlx::Pool<sqlx::Postgres>);
+
+#[async_trait::async_trait]
+impl BatchFn<String, Result<Category, DbError>> for CategoryBatcher {
+    async fn load(
+        &mut self,
+        keys: &[String],
+    ) -> std::collections::HashMap<String, Result<Category, DbError>> {
+        let categories = sqlx::query_as!(
+            Category,
+            r"SELECT id, uid, name, parent_uid FROM category WHERE uid = any($1)",
+            keys
+        )
+        .fetch_all(&self.0)
+        .await;
+
+        match categories {
+            Ok(categories) => categories
+                .into_iter()
+                .map(|category| (category.uid.clone(), Ok(category)))
+                .collect(),
+            Err(_err) => keys.iter().map(|k| (k.to_owned(), Err(DbError))).collect(),
+        }
     }
 }
 
@@ -1085,6 +1104,7 @@ async fn graphql_route(
         meal_type_loader: Loader::new(MealTypeBatcher(conns.pool.clone())),
         grocery_list_loader: Loader::new(GroceryListBatcher(conns.pool.clone())),
         menu_loader: Loader::new(MenuBatcher(conns.pool.clone())),
+        category_loader: Loader::new(CategoryBatcher(conns.pool.clone())),
 
         conns: (*conns).clone(),
     };
