@@ -683,17 +683,6 @@ impl Menu {
             .await
             .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
     }
-
-    async fn from_uid(context: &Context, uid: &str) -> Result<Option<Self>, FieldError> {
-        sqlx::query_as!(
-            Self,
-            r"SELECT id, uid, name, notes, days FROM menu WHERE uid = $1",
-            uid
-        )
-        .fetch_optional(&context.conns.pool)
-        .await
-        .map_err(|_err| FieldError::new("could not query database", graphql_value!(None)))
-    }
 }
 
 #[graphql_object(context = Context)]
