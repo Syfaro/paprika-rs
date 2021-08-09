@@ -1,4 +1,7 @@
-use std::convert::{TryFrom, TryInto};
+use std::{
+    convert::{TryFrom, TryInto},
+    io::Write,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -468,6 +471,32 @@ impl PaprikaClient {
         }
     }
 
+    #[allow(dead_code)]
+    async fn json_post<S, D>(&self, endpoint: S, data: D) -> Result<(), Error>
+    where
+        S: AsRef<str>,
+        D: serde::Serialize,
+    {
+        let json = serde_json::to_vec(&data)?;
+
+        let mut compressor =
+            flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        compressor.write_all(&json)?;
+        let payload = compressor.finish()?;
+
+        let part = reqwest::multipart::Part::bytes(payload).file_name("file");
+        let form = reqwest::multipart::Form::default().part("data", part);
+
+        self.client
+            .post(format!("{}/{}/", API_ENDPOINT, endpoint.as_ref()))
+            .multipart(form)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        Ok(())
+    }
+
     pub async fn status(&self) -> Result<PaprikaStatus, Error> {
         self.json_get("sync/status").await
     }
@@ -546,6 +575,7 @@ mod tests {
     }
 
     async fn get_paprika() -> PaprikaClient {
+        let _ = tracing_subscriber::fmt::try_init();
         let token = std::env::var("PAPRIKA_TOKEN").expect("tests require PAPRIKA_TOKEN");
         PaprikaClient::token(token)
             .await
