@@ -305,7 +305,7 @@ struct Meal {
     name: String,
     date: chrono::DateTime<chrono::Utc>,
 
-    recipe_uid: String,
+    recipe_uid: Option<String>,
     type_uid: String,
 }
 
@@ -350,12 +350,18 @@ impl Meal {
         self.date
     }
 
-    async fn recipe(&self, context: &Context) -> Result<Recipe, FieldError> {
+    async fn recipe(&self, context: &Context) -> Result<Option<Recipe>, FieldError> {
+        let recipe_uid = match &self.recipe_uid {
+            Some(recipe_uid) => recipe_uid.clone(),
+            None => return Ok(None),
+        };
+
         context
             .recipe_loader
-            .load(self.recipe_uid.clone())
+            .load(recipe_uid)
             .await
             .map_err(|_err| FieldError::new("item should always have recipe", graphql_value!(None)))
+            .map(Option::Some)
     }
 
     async fn meal_type(&self, context: &Context) -> Result<MealType, FieldError> {

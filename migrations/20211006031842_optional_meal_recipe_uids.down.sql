@@ -1,0 +1,1 @@
+ALTER TABLE meal ALTER COLUMN recipe_uid SET NOT NULL;

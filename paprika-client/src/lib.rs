@@ -183,7 +183,7 @@ pub struct PaprikaRecipe {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PaprikaMeal {
     pub uid: String,
-    pub recipe_uid: String,
+    pub recipe_uid: Option<String>,
     #[serde(with = "paprika_date_format")]
     pub date: chrono::DateTime<chrono::Utc>,
     #[serde(rename = "type")]
