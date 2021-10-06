@@ -789,44 +789,6 @@
       ]
     }
   },
-  "67866d2f5f237db373b79cbb416f1c154b618b745e5586e401e373e137d7e609": {
-    "query": "SELECT id, uid, name, parent_uid FROM category WHERE uid = $1",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Int4"
-        },
-        {
-          "ordinal": 1,
-          "name": "uid",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 2,
-          "name": "name",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 3,
-          "name": "parent_uid",
-          "type_info": "Text"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      },
-      "nullable": [
-        false,
-        false,
-        false,
-        true
-      ]
-    }
-  },
   "6d11794c6c64742bb7239ee940c3071bdb5795b76b9ab7c0f678401d72c017d0": {
     "query": "INSERT INTO category (uid, order_flag, name, parent_uid) VALUES ($1, $2, $3, $4)",
     "describe": {
@@ -2196,7 +2158,7 @@
       },
       "nullable": [
         false,
-        false,
+        true,
         false,
         false,
         false,
@@ -2244,7 +2206,7 @@
         false,
         false,
         false,
-        false,
+        true,
         false
       ]
     }
@@ -2459,7 +2421,7 @@
         false,
         false,
         false,
-        false,
+        true,
         false
       ]
     }
